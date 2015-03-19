@@ -66,7 +66,7 @@ def get_proj4(prj):
     # using osgeo
     from osgeo import osr
 
-    prjfile = prj.split('.')[0] + '.prj' # allows shp or prj to be argued
+    prjfile = prj[:-4] + '.prj' # allows shp or prj to be argued
     prjtext = open(prjfile).read()
     srs = osr.SpatialReference()
     srs.ImportFromESRI([prjtext])
