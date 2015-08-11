@@ -12,6 +12,10 @@ import mpl_toolkits.basemap.pyproj as pyproj
 import pandas as pd
 import shutil
 import GISio
+try:
+    from rtree import index
+except:
+    print 'Warning: rtree not installed - some functions will not work'
 
 def projectdf(df, projection1, projection2):
     '''
@@ -76,7 +80,7 @@ def intersect_rtree(geom1, geom2):
     A list of the same length as geom2; containing for each feature in geom2,
     a list of indicies of intersecting geometries in geom1.
     """
-    from rtree import index
+
 
     # build spatial index for items in geom1
     print 'Building rtree spatial index...'

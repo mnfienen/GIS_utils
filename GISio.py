@@ -252,6 +252,16 @@ def xlsx2points(xlsx, sheetname='Sheet1', X='X', Y='Y', shpname=None, prj='EPSG:
     df['geometry'] = [Point(p) for p in zip(df[X], df[Y])]
     df2shp(df, shpname, geo_column='geometry', prj=prj)
 
+def pointsdf2shp(dataframe, shpname, X='X', Y='Y', index=False,  prj=None, epsg=None, proj4=None, crs=None):
+    '''
+    convert dataframe with point information to shapefile
+    follows the same logic as xlsx2points above but no need for Excel file --> assumes point data already
+    in the dataframe. Note that prj, epsg, etc. get passed along using the same logic as df2shp
+    '''
+    if 'geometry' not in [k.lower() for k in dataframe.keys()]:
+        dataframe['geometry'] = [Point(p) for p in zip(dataframe[X],dataframe[Y])]
+    df2shp(dataframe, shpname, 'geometry', index, prj, epsg, proj4, crs)
+
 
 def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, epsg=None, proj4=None, crs=None):
     '''
