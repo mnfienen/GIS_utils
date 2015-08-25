@@ -73,23 +73,36 @@ def get_proj4(prj):
     proj4 = srs.ExportToProj4()
     return proj4
 
-def shp2df(shplist, index=None, clipto=pd.DataFrame(), true_values=None, false_values=None, \
+def shp2df(shplist, index=None, clipto=[], true_values=None, false_values=None, \
            skip_empty_geom=True):
-    '''
-    Read shapefile into Pandas dataframe
-    ``shplist`` = (string or list) of shapefile name(s)
-    ``index`` = (string) column to use as index for dataframe
-    ``geometry`` = (True/False) whether or not to read geometric information
-    ``clipto`` = (dataframe) limit what is brought in to items in index of clipto (requires index)
-    ``true_values`` = (list) same as argument for pandas read_csv
-    ``false_values`` = (list) same as argument for pandas read_csv
-    from shapefile into dataframe column "geometry"
-    '''
+    """Read shapefile into pandas DataFrame.
+
+    Parameters
+    ----------
+    shplist : string or list
+        of shapefile name(s)
+    index : string
+        Column to use as index for dataframe
+    clipto : list
+        limit what is brought in to items in index of clipto (requires index)
+    true_values : list
+        same as argument for pandas read_csv
+    false_values : list
+        same as argument for pandas read_csv
+    skip_empty_geom : True/False, default True
+        Drops shapefile entries with null geometries.
+        DBF files (which specify null geometries in their schema) will still be read.
+
+    Returns
+    -------
+    df : DataFrame
+        with attribute fields as columns; feature geometries are stored as
+    shapely geometry objects in the 'geometry' column.
+    """
     if isinstance(shplist, str):
         shplist = [shplist]
 
     if len(clipto) > 0 and index:
-        clipto_index = np.ravel(clipto.index)
         clip = True
     else:
         clip = False
@@ -112,7 +125,7 @@ def shp2df(shplist, index=None, clipto=pd.DataFrame(), true_values=None, false_v
                 props = line['properties']
                 # limit what is brought in to items in index of clipto
                 if clip:
-                    if not props[index] in clipto_index:
+                    if not props[index] in clipto:
                         continue
                 props['geometry'] = line.get('geometry', None)
                 attributes.append(props)
@@ -144,6 +157,7 @@ def shp2df(shplist, index=None, clipto=pd.DataFrame(), true_values=None, false_v
             print '--> building dataframe... (may take a while for large shapefiles)'
             shp_df = pd.DataFrame(attributes)
 
+        shp_obj.close()
         # set the dataframe index from the index column
         if index is not None:
             shp_df.index = shp_df[index].values
@@ -166,7 +180,7 @@ def shp2df(shplist, index=None, clipto=pd.DataFrame(), true_values=None, false_v
     return df
     
 
-def shp_properties(df):
+def shp_properties2(df):
     # convert dtypes in dataframe to 32 bit
     #i = -1
     for i, dtype in enumerate(df.dtypes.tolist()):
@@ -188,6 +202,26 @@ def shp_properties(df):
     dtypes = [''.join([c for c in d.name if not c.isdigit()]) for d in list(df.dtypes)]
     #dtypes = [d.name for d in list(df.dtypes)]
     # also exchange any 'object' dtype for 'str'
+    dtypes = [d.replace('object', 'str') for d in dtypes]
+    properties = dict(zip(df.columns, dtypes))
+    return properties
+
+def shp_properties(df):
+
+    # remap 64 bit integers to 32 bit
+    int64 = (df.dtypes == 'int64')
+    df.loc[:, int64] = df.loc[:, int64].astype('int32')
+
+    # remap floats
+    floats = np.array(['float' in d.name for d in df.dtypes])
+    df.loc[:, floats] = df.loc[:, floats].astype('float64')
+
+    # remap everything else to strings
+    to_strings = (df.dtypes != 'int64') & (df.dtypes != 'float64') & (df.columns != 'geometry')
+    df.loc[:, to_strings] = df.loc[:, to_strings].astype('str')
+
+    # strip dtypes to just 'float', 'int' or 'str'
+    dtypes = [''.join([c for c in d.name if not c.isdigit()]) for d in list(df.dtypes)]
     dtypes = [d.replace('object', 'str') for d in dtypes]
     properties = dict(zip(df.columns, dtypes))
     return properties
@@ -283,6 +317,10 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
         df['geometry'] = df[geo_column]
         df.drop(geo_column, axis=1, inplace=True)
 
+    # assign none for geometry, to write a dbf file from dataframe
+    if 'geometry' not in df.columns:
+        df['geometry'] = None
+        
     # include index in shapefile as an attribute field
     if index:
         if df.index.name is None:
@@ -319,7 +357,12 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
         pass
     else:
         pass
-    Type = df.iloc[0]['geometry'].type
+        
+    if df.iloc[0]['geometry'] is not None:
+        Type = df.iloc[0]['geometry'].type
+    else:
+        Type = None
+        
     schema = {'geometry': Type, 'properties': properties}
     length = len(df)
 
