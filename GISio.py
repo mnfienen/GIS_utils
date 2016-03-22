@@ -320,8 +320,11 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
         df.drop(geo_column, axis=1, inplace=True)
 
     # assign none for geometry, to write a dbf file from dataframe
+    Type = None
     if 'geometry' not in df.columns:
         df['geometry'] = None
+        Type = 'None'
+        mapped = [None] * len(df)
 
     # reset the index to integer index to enforce ordering
     # retain index as attribute field if index=True
@@ -354,13 +357,14 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
         pass
     else:
         pass
-        
-    if df.iloc[0]['geometry'] is not None:
-        Type = df.iloc[0]['geometry'].type
-        mapped = [mapping(g) for g in df.geometry]
-    else:
-        Type = 'None'
-        mapped = [None] * len(df)
+
+    if Type != 'None':
+        for g in df.geometry:
+            try:
+                Type = g.type
+            except:
+                continue
+            mapped = [mapping(g) for g in df.geometry]
         
     schema = {'geometry': Type, 'properties': properties}
     length = len(df)
