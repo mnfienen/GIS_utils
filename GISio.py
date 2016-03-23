@@ -364,7 +364,7 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
                 Type = g.type
             except:
                 continue
-            mapped = [mapping(g) for g in df.geometry]
+    mapped = [mapping(g) for g in df.geometry]
         
     schema = {'geometry': Type, 'properties': properties}
     length = len(df)
