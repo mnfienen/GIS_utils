@@ -1,6 +1,7 @@
 import sys
 sys.path.insert(0, '..')
 import os
+import time
 import numpy as np
 import pandas as pd
 from shapely.geometry import Point
@@ -21,27 +22,35 @@ def test_shp_read_and_write():
     df = pd.DataFrame({'reach': np.arange(10000001, 10000100, dtype=int), 'value': np.arange(1, 100, dtype=float),
                        'name': ['stuff{}'.format(i) for i in np.arange(1, 100)],
                        'isTrue': [True, False] * 49 + [True]})
-    df2shp(df, 'temp/junk.dbf')
-    df = shp2df('temp/junk.dbf', true_values='True', false_values='False')
-    assert [d.name for d in df.dtypes] == ['bool', 'object', 'int64', 'float64']
-    assert df.isTrue.sum() == 50
+    cols = ['reach', 'value', 'name', 'isTrue']
+    df1 = df[cols] #designate a column order
+    ta = time.time()
+    df2shp(df1, 'temp/junk.dbf', retain_order=True)
+    print("wrote shapefile in {:.6f}s\n".format(time.time() - ta))
+    ta = time.time()
+    df2 = shp2df('temp/junk.dbf', true_values='True', false_values='False')
+    print("read shapefile in {:.6f}s\n".format(time.time() - ta))
+    #assert list(df2.columns) == cols
+    assert [d.name for d in df2.dtypes] == ['int64', 'float64', 'object', 'bool']
+    assert df2.isTrue.sum() == 50
 
     # test with geometry
-    df = pd.DataFrame({'reach': np.arange(1, 101, dtype=int), 'value': np.arange(100, dtype=float),
+    df1 = pd.DataFrame({'reach': np.arange(1, 101, dtype=int), 'value': np.arange(100, dtype=float),
                        'name': ['stuff{}'.format(i) for i in np.arange(100)],
                        'geometry': [Point([i, i]) for i in range(100)]})
-    original_columns = df.columns.tolist()
-    df2shp(df, 'temp/junk.shp')
-    df = shp2df('temp/junk.shp')
-    assert df.geometry[0] == Point([0.0, 0.0])
-    assert np.array_equal(df.index.values, np.arange(100)) # check ordering of rows
-    assert df.columns.tolist() == original_columns # check column order
+    cols = ['reach', 'value', 'name', 'geometry'] # geometry is placed in last column when shp is read in
+    df1 = df1[cols]
+    df2shp(df1, 'temp/junk.shp', retain_order=True)
+    df2 = shp2df('temp/junk.shp')
+    assert df2.geometry[0] == Point([0.0, 0.0])
+    assert np.array_equal(df2.index.values, np.arange(100)) # check ordering of rows
+    assert df2.columns.tolist() == cols # check column order
 
     # test datetime handling and retention of index
-    df.index = pd.date_range('2016-01-01 1:00:00', '2016-01-01 1:01:39', freq='s')
+    df.index = pd.date_range('2016-01-01 1:00:00', '2016-01-01 1:01:38', freq='s')
     df.index.name = 'datetime'
-    df2shp(df, 'temp/junk.shp', index=True)
-    df = shp2df('temp/junk.shp')
+    df2shp(df, 'temp/junk.dbf', index=True)
+    df = shp2df('temp/junk.dbf')
     assert 'datetime' in df.columns
     assert df.datetime[0] == '2016-01-01 01:00:00'
 
