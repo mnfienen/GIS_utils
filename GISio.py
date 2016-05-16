@@ -2,6 +2,7 @@
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
 import os
+from collections import OrderedDict
 import numpy as np
 import fiona
 from shapely.geometry import Point, shape, asLineString, mapping
@@ -144,6 +145,9 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
                     attributes.append(props)
             print('--> building dataframe... (may take a while for large shapefiles)')
             shp_df = pd.DataFrame(attributes)
+            # reorder fields in the DataFrame to match the input shapefile
+            if len(attributes) > 0:
+                shp_df = shp_df[attributes[0].keys()]
 
             # handle null geometries
             geoms = shp_df.geometry.tolist()
@@ -170,6 +174,9 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
                     attributes.append(line['properties'])
             print('--> building dataframe... (may take a while for large shapefiles)')
             shp_df = pd.DataFrame(attributes)
+            # reorder fields in the DataFrame to match the input shapefile
+            if len(attributes) > 0:
+                shp_df = shp_df[attributes[0].keys()]
 
         shp_obj.close()
         if len(shp_df) == 0:
@@ -222,7 +229,7 @@ def shp_properties(df):
     dtypes = [stripandreplace(df[c].dtype.name)
               if c != 'geometry'
               else df[c].dtype.name for c in df.columns]
-    properties = dict(list(zip(df.columns, dtypes)))
+    properties = OrderedDict(list(zip(df.columns, dtypes)))
     return properties
 
 
@@ -296,12 +303,19 @@ def pointsdf2shp(dataframe, shpname, X='X', Y='Y', index=False,  prj=None, epsg=
     df2shp(dataframe, shpname, 'geometry', index, prj, epsg, proj4, crs)
 
 
-def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, epsg=None, proj4=None, crs=None):
+def df2shp(dataframe, shpname, geo_column='geometry', index=False,
+           retain_order=False,
+           prj=None, epsg=None, proj4=None, crs=None):
     '''
     Write a DataFrame to a shapefile
     dataframe: dataframe to write to shapefile
     geo_column: optional column containing geometry to write - default is 'geometry'
     index: If true, write out the dataframe index as a column
+    retain_order : boolean
+        Retain column order in dataframe, using an OrderedDict. Shapefile will
+        take about twice as long to write, since OrderedDict output is not
+        supported by the pandas DataFrame object.
+
     --->there are four ways to specify the projection....choose one
     prj: <file>.prj filename (string)
     epsg: EPSG identifier (integer)
@@ -364,12 +378,15 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
                 Type = g.type
             except:
                 continue
-    mapped = [mapping(g) for g in df.geometry]
+        mapped = [mapping(g) for g in df.geometry]
         
     schema = {'geometry': Type, 'properties': properties}
     length = len(df)
 
-    props = df.drop('geometry', axis=1).astype(object).to_dict(orient='records')
+    if not retain_order:
+        props = df.drop('geometry', axis=1).astype(object).to_dict(orient='records')
+    else:
+        props = [OrderedDict(r) for i, r in df.drop('geometry', axis=1).astype(object).iterrows()]
     print('writing {}...'.format(shpname))
     with fiona.collection(shpname, "w", driver="ESRI Shapefile", crs=crs, schema=schema) as output:
         for i in range(length):
