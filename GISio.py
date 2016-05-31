@@ -147,7 +147,7 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
             shp_df = pd.DataFrame(attributes)
             # reorder fields in the DataFrame to match the input shapefile
             if len(attributes) > 0:
-                shp_df = shp_df[attributes[0].keys()]
+                shp_df = shp_df[list(attributes[0].keys())]
 
             # handle null geometries
             geoms = shp_df.geometry.tolist()
