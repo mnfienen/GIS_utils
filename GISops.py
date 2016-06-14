@@ -258,6 +258,33 @@ def dissolve_df(in_df, dissolve_attribute):
         
     return df_out
 
+def contour2shp(ctr, outshape='contours.shp', **kwargs):
+    """Convert matplotlib contour plot object to shapefile.
+
+    Parameters
+    ----------
+    ctr : matplotlib.contour.QuadContourSet
+        (object returned by matplotlib.pyplot.contour)
+    outshape : str
+        path of output shapefile
+    **kwargs : key-word arguments to GISio.df2shp
+
+    Returns
+    -------
+    shapefile of contours
+    """
+    from GISio import df2shp
+    levels = ctr.levels
+    geoms = []
+    level = []
+    for i, c in enumerate(ctr.collections):
+        paths = c.get_paths()
+        geoms += [LineString(p.vertices) for p in paths]
+        level += list(np.ones(len(paths)) * levels[i])
+
+    df = pd.DataFrame({'geometry': geoms, 'level': level})
+    df2shp(df, outshape, **kwargs)
+
 
 def join_csv2shp(shapefile, shp_joinfield, csvfile, csv_joinfield, out_shapefile, how='outer'):
     '''
