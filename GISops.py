@@ -263,7 +263,7 @@ def contour2shp(ctr, outshape='contours.shp', **kwargs):
 
     Parameters
     ----------
-    ctr : matplotlib.contour.QuadContourSet
+    ctr : matplotlib.contour.QuadContourSet or list of them
         (object returned by matplotlib.pyplot.contour)
     outshape : str
         path of output shapefile
@@ -274,13 +274,18 @@ def contour2shp(ctr, outshape='contours.shp', **kwargs):
     shapefile of contours
     """
     from GISio import df2shp
+
+    if not isinstance(ctr, list):
+        contours = [ctr]
+
     levels = ctr.levels
     geoms = []
     level = []
-    for i, c in enumerate(ctr.collections):
-        paths = c.get_paths()
-        geoms += [LineString(p.vertices) for p in paths]
-        level += list(np.ones(len(paths)) * levels[i])
+    for ctr in contours:
+        for i, c in enumerate(ctr.collections):
+            paths = c.get_paths()
+            geoms += [LineString(p.vertices) for p in paths]
+            level += list(np.ones(len(paths)) * levels[i])
 
     df = pd.DataFrame({'geometry': geoms, 'level': level})
     df2shp(df, outshape, **kwargs)

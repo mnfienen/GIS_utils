@@ -24,4 +24,3 @@ if __name__ == '__main__':
     if not os.path.isdir('temp'):
         os.makedirs('temp')
     test_contour2shp()
-    
