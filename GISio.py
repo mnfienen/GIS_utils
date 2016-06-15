@@ -221,6 +221,9 @@ def shp_properties(df):
         if c != 'geometry':
             df[c] = df[c].astype(newdtypes.get(df.dtypes[c].name,
                                                df.dtypes[c].name))
+        if 'int' in df.dtypes[c].name:
+            if np.max(np.abs(df[c])) > 2**31 -1:
+                df[c] = df[c].astype(str)
 
     # strip dtypes to just 'float', 'int' or 'str'
     def stripandreplace(s):
