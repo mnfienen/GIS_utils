@@ -329,6 +329,10 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False,
     if os.path.split(shpname)[0] != '' and not os.path.isdir(os.path.split(shpname)[0]):
         raise IOError("Output folder doesn't exist")
 
+    # check for empty dataframe
+    if len(dataframe) == 0:
+        raise IndexError("DataFrame is empty!")
+
     df = dataframe.copy() # make a copy so the supplied dataframe isn't edited
 
     # reassign geometry column if geo_column is special (e.g. something other than "geometry")
