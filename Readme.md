@@ -1,14 +1,13 @@
-###GIS_utils
-Convenience functions for transferring information between shapefiles, 
-pandas dataframes, and csv or Excel files. Also for GIS operations
-in pandas (in development).
+# GIS_utils
 
-#####to install:  
-```
-$ python setup.py install
+###To install:
+Clone the repository, and then from a command prompt in the repository folder:
+```python
+$python setup.py install
 ```
 
-#####to import:
-```
+###To import:
+```python
 import GISio
+import GISops
 ```
