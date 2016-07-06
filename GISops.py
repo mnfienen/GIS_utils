@@ -20,6 +20,40 @@ try:
 except:
     print('Warning: rtree not installed - some functions will not work')
 
+def clip_raster(inraster, features, outraster):
+
+    rasterio = import_rasterio()
+    from rasterio.tools.mask import mask
+
+    if isinstance(features, str): # features are in a shapefile
+        with fiona.open(features, "r") as shp:
+            geoms = [feature["geometry"] for feature in shp]
+    elif isinstance(features, list):
+        if isinstance(features[0], dict): # features are geo-json
+            try:
+                shape(features[0])
+                geoms = features
+            except:
+                raise TypeError('Unrecognized feature type')
+        else: # features are shapely geometries
+            try:
+                mapping(features[0])
+                geoms = [mapping(f) for f in features]
+            except:
+                raise TypeError('Unrecognized feature type')
+
+    with rasterio.open(inraster) as src:
+        out_image, out_transform = mask(src, geoms, crop=True)
+        out_meta = src.meta.copy()
+
+    out_meta.update({"driver": "GTiff",
+                     "height": out_image.shape[1],
+                     "width": out_image.shape[2],
+                     "transform": out_transform})
+
+    with rasterio.open(outraster, "w", **out_meta) as dest:
+        dest.write(out_image)
+
 def projectdf(df, projection1, projection2):
     """Reproject a dataframe's geometry column to new coordinate system
 
@@ -91,11 +125,7 @@ def project_raster(src_raster, dst_raster, dst_crs):
         Examples:
             'EPSG:26715' 
     """
-    try:
-        import rasterio
-        from rasterio.warp import calculate_default_transform, reproject, RESAMPLING
-    except:
-        print('This function requires rasterio.')
+
 
     with rasterio.open(src_raster) as src:
         affine, width, height = calculate_default_transform(
@@ -258,37 +288,46 @@ def dissolve_df(in_df, dissolve_attribute):
         
     return df_out
 
-def contour2shp(ctr, outshape='contours.shp', **kwargs):
+def contour2shp(contours, outshape='contours.shp', 
+                add_fields={},
+                **kwargs):
     """Convert matplotlib contour plot object to shapefile.
 
     Parameters
     ----------
-    ctr : matplotlib.contour.QuadContourSet or list of them
+    contours : matplotlib.contour.QuadContourSet or list of them
         (object returned by matplotlib.pyplot.contour)
     outshape : str
         path of output shapefile
+    add_fields : dict of lists or 1D arrays
+        Add fields (keys=fieldnames), with attribute data (values=lists) to shapefile. 
+        Attribute data must be of the same length, and in the same order as the
+        total number of contour objects x number of levels in each object.
     **kwargs : key-word arguments to GISio.df2shp
 
     Returns
     -------
-    shapefile of contours
+    df : dataframe of shapefile contents
     """
     from GISio import df2shp
 
-    if not isinstance(ctr, list):
-        contours = [ctr]
+    if not isinstance(contours, list):
+        contours = [contours]
 
-    levels = ctr.levels
     geoms = []
     level = []
     for ctr in contours:
+        levels = ctr.levels
         for i, c in enumerate(ctr.collections):
             paths = c.get_paths()
             geoms += [LineString(p.vertices) for p in paths]
             level += list(np.ones(len(paths)) * levels[i])
-
-    df = pd.DataFrame({'geometry': geoms, 'level': level})
+    
+    d = {'geometry': geoms, 'level': level}
+    d.update(add_fields)
+    df = pd.DataFrame(d)
     df2shp(df, outshape, **kwargs)
+    return df
 
 
 def join_csv2shp(shapefile, shp_joinfield, csvfile, csv_joinfield, out_shapefile, how='outer'):
@@ -323,3 +362,11 @@ def rotate_coords(coords, rot, origin):
 
     return list(zip(r.coords.xy[0], r.coords.xy[1]))
 
+
+def import_rasterio():
+    try:
+        import rasterio
+        from rasterio.warp import calculate_default_transform, reproject, RESAMPLING
+    except:
+        print('This function requires rasterio.')
+    return rasterio

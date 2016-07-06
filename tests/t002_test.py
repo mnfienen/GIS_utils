@@ -13,12 +13,13 @@ def test_contour2shp():
         return np.sqrt((x2-x1)**2+(y2-y1)**2)
 
     def s(x1, y1, x2, y2):
-        return np.log(dist(x1, y1, x2, y2)) / (2 * np.pi)
+        return np.log(100/dist(x1, y1, x2, y2)) / (2 * np.pi)
 
     S = np.reshape([s(x, y, 4.5, 4.5) for x, y in zip(X.ravel(), Y.ravel())], (10, 10))
-    ctr = plt.contour(S)
+    levels = [0.5, 0.6, 0.7]
+    ctr = plt.contour(S, levels=levels)
 
-    contour2shp(ctr, 'temp/ctr.shp')
+    contour2shp(ctr, 'temp/ctr.shp', add_fields={'stuff': ['level1', 'level2', 'level3']})
 
 if __name__ == '__main__':
     if not os.path.isdir('temp'):
