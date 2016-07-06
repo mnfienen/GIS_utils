@@ -176,7 +176,7 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
             shp_df = pd.DataFrame(attributes)
             # reorder fields in the DataFrame to match the input shapefile
             if len(attributes) > 0:
-                shp_df = shp_df[attributes[0].keys()]
+                shp_df = shp_df[list(attributes[0].keys())]
 
         shp_obj.close()
         if len(shp_df) == 0:
@@ -221,6 +221,9 @@ def shp_properties(df):
         if c != 'geometry':
             df[c] = df[c].astype(newdtypes.get(df.dtypes[c].name,
                                                df.dtypes[c].name))
+        if 'int' in df.dtypes[c].name:
+            if np.max(np.abs(df[c])) > 2**31 -1:
+                df[c] = df[c].astype(str)
 
     # strip dtypes to just 'float', 'int' or 'str'
     def stripandreplace(s):
@@ -325,6 +328,10 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False,
     # first check if output path exists
     if os.path.split(shpname)[0] != '' and not os.path.isdir(os.path.split(shpname)[0]):
         raise IOError("Output folder doesn't exist")
+
+    # check for empty dataframe
+    if len(dataframe) == 0:
+        raise IndexError("DataFrame is empty!")
 
     df = dataframe.copy() # make a copy so the supplied dataframe isn't edited
 
