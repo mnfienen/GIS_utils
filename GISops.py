@@ -22,37 +22,24 @@ except:
 
 def clip_raster(inraster, features, outraster):
 
-    rasterio = import_rasterio()
+    rasterio = import_rasterio() # check for rasterio
     from rasterio.tools.mask import mask
 
-    if isinstance(features, str): # features are in a shapefile
-        with fiona.open(features, "r") as shp:
-            geoms = [feature["geometry"] for feature in shp]
-    elif isinstance(features, list):
-        if isinstance(features[0], dict): # features are geo-json
-            try:
-                shape(features[0])
-                geoms = features
-            except:
-                raise TypeError('Unrecognized feature type')
-        else: # features are shapely geometries
-            try:
-                mapping(features[0])
-                geoms = [mapping(f) for f in features]
-            except:
-                raise TypeError('Unrecognized feature type')
+    geoms = _to_geojson(features)
 
     with rasterio.open(inraster) as src:
+        print('clipping {}...'.format(inraster))
         out_image, out_transform = mask(src, geoms, crop=True)
         out_meta = src.meta.copy()
 
-    out_meta.update({"driver": "GTiff",
-                     "height": out_image.shape[1],
-                     "width": out_image.shape[2],
-                     "transform": out_transform})
+        out_meta.update({"driver": "GTiff",
+                         "height": out_image.shape[1],
+                         "width": out_image.shape[2],
+                         "transform": out_transform})
 
-    with rasterio.open(outraster, "w", **out_meta) as dest:
-        dest.write(out_image)
+        with rasterio.open(outraster, "w", **out_meta) as dest:
+            dest.write(out_image)
+            print('wrote {}'.format(outraster))
 
 def projectdf(df, projection1, projection2):
     """Reproject a dataframe's geometry column to new coordinate system
@@ -110,7 +97,8 @@ def project(geom, projection1, projection2):
     # do the transformation!
     return transform(project, geom)
 
-def project_raster(src_raster, dst_raster, dst_crs):
+def project_raster(src_raster, dst_raster, dst_crs,
+                   resampling=1, resolution=None, num_threads=2):
     """Reproject a raster from one coordinate system to another using Rasterio
     code from: https://github.com/mapbox/rasterio/blob/master/docs/reproject.rst
 
@@ -123,13 +111,31 @@ def project_raster(src_raster, dst_raster, dst_crs):
     dst_crs : str
         Coordinate system of reprojected raster.
         Examples:
-            'EPSG:26715' 
+            'EPSG:26715'
+    resampling : int (see rasterio source code: https://github.com/mapbox/rasterio/blob/master/rasterio/enums.py)
+        nearest = 0
+        bilinear = 1
+        cubic = 2
+        cubic_spline = 3
+        lanczos = 4
+        average = 5
+        mode = 6
+        gauss = 7
+        max = 8
+        min = 9
+        med = 10
+        q1 = 11
+        q3 = 12
+    resolution : tuple of floats (len 2)
+        cell size of the output raster
+        (x resolution, y resolution)
     """
-
+    rasterio = import_rasterio() # check for rasterio
+    from rasterio.warp import calculate_default_transform, reproject
 
     with rasterio.open(src_raster) as src:
         affine, width, height = calculate_default_transform(
-            src.crs, dst_crs, src.width, src.height, *src.bounds)
+            src.crs, dst_crs, src.width, src.height, *src.bounds, resolution=resolution)
         kwargs = src.meta.copy()
         kwargs.update({
             'crs': dst_crs,
@@ -147,7 +153,8 @@ def project_raster(src_raster, dst_raster, dst_crs):
                     src_crs=src.crs,
                     dst_transform=affine,
                     dst_crs=dst_crs,
-                    resampling=RESAMPLING.nearest)
+                    resampling=resampling,
+                    num_threads=num_threads)
 
 def build_rtree_index(geom):
     """Builds an rtree index. Useful for multiple intersections with same index.
@@ -367,6 +374,28 @@ def import_rasterio():
     try:
         import rasterio
         from rasterio.warp import calculate_default_transform, reproject, RESAMPLING
+        return rasterio
     except:
         print('This function requires rasterio.')
-    return rasterio
+
+
+def _to_geojson(features):
+    """convert input features to list of geojson geometries."""
+
+    if isinstance(features, str): # features are in a shapefile
+        with fiona.open(features, "r") as shp:
+            geoms = [feature["geometry"] for feature in shp]
+    elif isinstance(features, list):
+        if isinstance(features[0], dict): # features are geo-json
+            try:
+                shape(features[0])
+                geoms = features
+            except:
+                raise TypeError('Unrecognized feature type')
+        else: # features are shapely geometries
+            try:
+                mapping(features[0])
+                geoms = [mapping(f) for f in features]
+            except:
+                raise TypeError('Unrecognized feature type')
+    return geoms

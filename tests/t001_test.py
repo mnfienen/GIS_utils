@@ -8,6 +8,11 @@ from shapely.geometry import Point
 from GISio import shp_properties
 from GISio import df2shp, shp2df
 
+
+def test_imports():
+    import fiona
+    import rasterio
+
 def test_shp_properties():
     df = pd.DataFrame({'reach': [1], 'value': [1.0], 'name': ['stuff']}, index=[0])
     assert [d.name for d in df.dtypes] == ['object', 'int64', 'float64']

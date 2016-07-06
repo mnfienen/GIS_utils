@@ -13,9 +13,6 @@ from GISops import clip_raster
 inraster = 'data/dem.tif'
 outpath = 'temp/'
 
-def test_imports():
-    import rasterio
-    import fiona
 
 def test_clip():
     import rasterio
