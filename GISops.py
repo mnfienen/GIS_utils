@@ -15,6 +15,7 @@ import pyproj
 import pandas as pd
 import shutil
 import GISio
+
 try:
     from rtree import index
 except:
@@ -98,7 +99,8 @@ def project(geom, projection1, projection2):
     return transform(project, geom)
 
 def project_raster(src_raster, dst_raster, dst_crs,
-                   resampling=1, resolution=None, num_threads=2):
+                   resampling=1, resolution=None, num_threads=2,
+                   driver='GTiff', extention='tif'):
     """Reproject a raster from one coordinate system to another using Rasterio
     code from: https://github.com/mapbox/rasterio/blob/master/docs/reproject.rst
 
@@ -129,11 +131,21 @@ def project_raster(src_raster, dst_raster, dst_crs,
     resolution : tuple of floats (len 2)
         cell size of the output raster
         (x resolution, y resolution)
+    driver : str
+        GDAL driver/format to use for writing dst_raster. Default is GeoTIFF.
+    extention : str
+        Should go with the driver (default 'tif')
     """
     rasterio = import_rasterio() # check for rasterio
     from rasterio.warp import calculate_default_transform, reproject
 
     with rasterio.open(src_raster) as src:
+        print('reprojecting {} from {}, res: {:.2e}, {:.2e}\nto {}, res: {:.2e}, {:.2e}...'.format(
+                src_raster,
+                src.crs.to_string(),
+                *src.res,
+                dst_crs,
+                *resolution))
         affine, width, height = calculate_default_transform(
             src.crs, dst_crs, src.width, src.height, *src.bounds, resolution=resolution)
         kwargs = src.meta.copy()
@@ -142,7 +154,8 @@ def project_raster(src_raster, dst_raster, dst_crs,
             'transform': affine,
             'affine': affine,
             'width': width,
-            'height': height
+            'height': height,
+            'driver': driver
         })
         with rasterio.open(dst_raster, 'w', **kwargs) as dst:
             for i in range(1, src.count + 1):
@@ -155,6 +168,7 @@ def project_raster(src_raster, dst_raster, dst_crs,
                     dst_crs=dst_crs,
                     resampling=resampling,
                     num_threads=num_threads)
+    print('wrote {}.'.format(dst_raster))
 
 def build_rtree_index(geom):
     """Builds an rtree index. Useful for multiple intersections with same index.
