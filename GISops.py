@@ -24,7 +24,7 @@ except:
 def clip_raster(inraster, features, outraster):
 
     rasterio = import_rasterio() # check for rasterio
-    from rasterio.tools.mask import mask
+    from rasterio.mask import mask
 
     geoms = _to_geojson(features)
 
@@ -143,7 +143,7 @@ def project_raster(src_raster, dst_raster, dst_crs,
         print('reprojecting {} from {}, res: {:.2e}, {:.2e}\nto {}, res: {:.2e}, {:.2e}...'.format(
                 src_raster,
                 src.crs.to_string(),
-                *src.res,
+                src.res[0], src.res[1],
                 dst_crs,
                 *resolution))
         affine, width, height = calculate_default_transform(

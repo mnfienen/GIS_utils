@@ -12,6 +12,10 @@ from GISio import df2shp, shp2df
 def test_imports():
     import fiona
     import rasterio
+    import shapely
+    import rtree
+    import gdal
+    import pyproj
 
 def test_shp_properties():
     df = pd.DataFrame({'reach': [1], 'value': [1.0], 'name': ['stuff']}, index=[0])
