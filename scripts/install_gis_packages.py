@@ -14,9 +14,9 @@ pips = 'source activate gis &&'
 pips += 'pip install https://github.com/aleaf/GIS_utils/archive/master.zip'
 
 if platform.system() == 'Windows':
-    print(platform.system())
-    pipinstalls = pipinstalls.replace('source', '')
-    print(pipinstalls)
+    print('Platform: {}'.format(platform.system()))
+    pips = pips.replace('source', '')
+    print(pips)
 
 cmds.append(pips)
 
