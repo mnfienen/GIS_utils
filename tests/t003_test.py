@@ -39,7 +39,7 @@ def test_get_values_at_points():
         assert np.abs(v1 - v2) < 0.01
 
 if __name__ == '__main__':
-    #test_clip()
+    test_clip()
     test_get_values_at_points()
 
 

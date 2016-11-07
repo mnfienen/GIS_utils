@@ -82,6 +82,7 @@ def test_large_integers():
 if __name__ == '__main__':
     if not os.path.isdir('temp'):
         os.makedirs('temp')
+    test_imports()
     test_shp_properties()
     test_shp_read_and_write()
     test_integer_dtypes()

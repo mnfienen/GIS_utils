@@ -387,7 +387,7 @@ def rotate_coords(coords, rot, origin):
 def import_rasterio():
     try:
         import rasterio
-        from rasterio.warp import calculate_default_transform, reproject, RESAMPLING
+        from rasterio.warp import calculate_default_transform, reproject
         return rasterio
     except:
         print('This function requires rasterio.')
