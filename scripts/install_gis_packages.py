@@ -27,7 +27,7 @@ with urlopen(url) as response, open(os.path.split(url)[-1], 'wb') as out_file:
 # pip installs
 pips = 'source activate gis &&'
 pips += 'pip install https://github.com/aleaf/GIS_utils/archive/master.zip'
-#pips += ' --cert={}'.format(os.path.split(url)[-1]) # use the certificate file name from url above
+pips += ' --cert={}'.format(os.path.split(url)[-1]) # use the certificate file name from url above
 
 if platform.system() == 'Windows':
     print('Platform: {}'.format(platform.system()))

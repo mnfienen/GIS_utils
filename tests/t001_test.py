@@ -8,6 +8,8 @@ from shapely.geometry import Point
 from GISio import shp_properties
 from GISio import df2shp, shp2df
 
+if not os.path.isdir('temp'):
+    os.makedirs('temp')
 
 def test_imports():
     import fiona
