@@ -11,6 +11,7 @@ from subprocess import Popen, PIPE
 
 cmds = []
 # set up conda
+cmds.append('conda update conda -y')
 cmds.append('conda config --add channels conda-forge')
 cmds.append('conda config --add channels defaults')
 cmds.append('conda config --set ssl_verify false')
@@ -29,21 +30,37 @@ pips = 'source activate gis &&'
 pips += 'pip install https://github.com/aleaf/GIS_utils/archive/master.zip'
 pips += ' --cert={}'.format(os.path.split(url)[-1]) # use the certificate file name from url above
 
+def make_install_script(pips):
+    installscript = '#!/bin/bash\n' + pips
+    installscript = installscript.replace('&&', '\n')
+    with open('install.sh', 'w') as input:
+        input.write(installscript)
+
 if platform.system() == 'Windows':
     print('Platform: {}'.format(platform.system()))
     pips = pips.replace('source', '')
     print(pips)
-    cmds.append(pips)
-    
+
 elif platform.system() == 'Darwin':
-    pips = '#!/bin/bash\n' + pips
-    pips = pips.replace('&&', '\n')
-    with open('install.sh', 'w') as input:
-        input.write(pips)
+    make_install_script(pips)
     Popen(['chmod', '+x', 'install.sh'], stdout=PIPE, stderr=PIPE)
-    cmds.append('./install.sh')
+    pips = './install.sh'
 
 for cmd in cmds: 
     print(cmd)
     os.system(cmd)
+    
+try:
+    os.system(pips)
+except:
+    # if the pip installs fail, try ditching the DOI certificate
+    pips = pips.split('--cert')[0]
+    if platform.system() == 'Windows':
+        pass
+    elif platform.system() == 'Darwin':
+        make_install_script(pips)
+        Popen(['chmod', '+x', 'install.sh'], stdout=PIPE, stderr=PIPE)
+        pips = './install.sh'
+    print(pips)
+    os.system(pips)
 
