@@ -34,17 +34,21 @@ try:
 except:
     pass
 
+exeloc = {'Windows': 'python',
+          'Darwin': os.path.join('bin', 'python')}
+
 # get the path for the pip command for the gis environment
 def get_gis_env_path():
     p = Popen(['conda', 'info', '-e'], stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
-    pth = [s.decode() for s in out.split() if 'envs/gis' in s.decode()]
+    pth = [s.decode() for s in out.split() if 'envs' in s.decode() and 'gis' in s.decode()]
     if len(pth) > 0:
-        return pth[0] + '/bin/pip'
+        return os.path.join(pth[0], exeloc[platform.system()])
 
 # pip installs
 url = 'http://internal.usgs.gov/oei/wp-content/itsec/DOIRootCA2.cer'
-pips = [get_gis_env_path(), 'install']
+pips = [get_gis_env_path(), '-m']
+pips += ['pip', 'install']
 pips += ['https://github.com/aleaf/GIS_utils/archive/master.zip']
 pips += ["""--cert={}""".format(os.path.split(url)[-1])] # use the certificate file name from url above
 
