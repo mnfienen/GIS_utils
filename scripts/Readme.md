@@ -28,6 +28,8 @@ then
 ```
 >python run_tests.py
 ```
+**Note: ```run_tests.py``` must be run from the "scripts" folder** (and the "tests" folder, which contains the tests, must be present at the same level as scripts; i.e. so that
+```cd ../tests``` would change the directory from scripts to tests.)
 The test script should report "OK" after it has ran.
 
 ### to uninstall
