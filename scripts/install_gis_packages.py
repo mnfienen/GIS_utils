@@ -11,13 +11,13 @@ from subprocess import Popen, PIPE
 
 cmds = []
 # set up conda
+cmds.append('conda config --set ssl_verify false')
 cmds.append('conda update conda -y')
 cmds.append('conda config --add channels conda-forge')
 cmds.append('conda config --add channels defaults')
-cmds.append('conda config --set ssl_verify false')
 cmds.append('conda config --set show_channel_urls true')
 # create new environment for the gis packages
-cmds.append('conda create -n gis python=3.4 ipython jupyter numpy matplotlib pandas=0.18 gdal fiona shapely rasterio rtree pyproj netcdf4 rasterstats pyshp basemap descartes datashader nose -y')
+cmds.append('conda create -n gis2 python=3.4 ipython jupyter numpy matplotlib pandas=0.18 gdal fiona shapely rasterio rtree pyproj netcdf4 rasterstats pyshp basemap descartes datashader nose -y')
 
 for cmd in cmds: 
     print(cmd)
