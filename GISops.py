@@ -21,6 +21,62 @@ try:
 except:
     print('Warning: rtree not installed - some functions will not work')
 
+
+def d8flow(array, force_flow=False, fill_single=False):
+    """Quick and dirty calculation of D8 flow direction on a raster,
+    similar to FlowDirection tool in ArcGIS.
+    Based on code from:
+    http://stackoverflow.com/questions/34336303/
+    applying-functions-to-multidimensional-numpy-arrays-without-loops
+
+    Parameters
+    ----------
+    array : 2D numpy array
+    force_flow : bool
+        Forces outward flow for all cells along the edges of the raster.
+        If False, outward flow only occurs if all surrounding values are greater.
+        (default False)
+
+    Returns
+    -------
+    d8array : array of same shape as input, with d8 flow directions.
+
+    Notes
+    -----
+    Some key differences with ArcGIS algorithm:
+    * Flow direction is always assigned using np.argmax() on the negative gradient at each cell.
+      For cells with multiple downgradient cells that have the same gradient,
+      the receiving cell is the first one returned by argmax().
+      In ArcGIS, if the cell is defined as being part of a sink, the directions indicating
+      these cells are added together. (For example, equal gradients to directions 1 and 4
+      would produce a value of 5). If the cell is not part of a sink, a direction is assigned
+      using a lookup table from Greenlee (1987). Soil Water Balance Code treats any non-D8 values
+      as closed depressions (no routing assigned). Therefore in closed depressions or flat areas,
+      this algorithm will produce different flow directions from ArcGIS in a small number of cells.
+    * The ArcGIS algorithm appears to assign flow directions even in flat areas (such as lakes).
+      The above algorithm assigns a value of 0 (undefined direction) to all minimum gradients <=0.
+    """
+    # pad the outside of the array to handle edges
+    if not force_flow:
+        padded = np.pad(array, ((1, 1), (1, 1)), mode='edge')
+    else:
+        padded = np.pad(array, ((1, 1), (1, 1)), mode='constant',
+                        constant_values=np.min(array) - 100)
+    nrow, ncol = padded.shape
+
+    gradient = np.empty((8, nrow - 2, ncol - 2), dtype=np.float)
+    code = np.empty(8, dtype=np.int)
+    for k in range(8):
+        theta = -k * np.pi / 4
+        code[k] = 2 ** k
+        j, i = np.int(1.5 * np.cos(theta)), -np.int(1.5 * np.sin(theta))
+        d = np.linalg.norm([i, j])
+        gradient[k] = (padded[1 + i: nrow - 1 + i, 1 + j: ncol - 1 + j] - padded[1: nrow - 1, 1: ncol - 1]) / d
+    direction = (-gradient).argmax(axis=0)
+    d8 = code.take(direction)
+    d8[gradient.min(axis=0) >= 0] = 0  # set cells with inward gradients to 0
+    return d8
+
 def clip_raster(inraster, features, outraster):
 
     rasterio = import_rasterio() # check for rasterio
@@ -41,6 +97,26 @@ def clip_raster(inraster, features, outraster):
         with rasterio.open(outraster, "w", **out_meta) as dest:
             dest.write(out_image)
             print('wrote {}'.format(outraster))
+
+def merge_rasters(inrasters, outfile):
+    from rasterio.merge import merge
+    srces = []
+    print('merging:')
+    for file in inrasters:
+        srces.append(rasterio.open(file))
+        print('\t{}'.format(file))
+    out_image, out_trans = merge(srces, nodata=0)
+
+    out_meta = srces[0].meta.copy()
+    out_meta.update({"driver": "GTiff",
+                     "height": out_image.shape[1],
+                     "width": out_image.shape[2],
+                     "transform": out_trans})
+    for src in srces:
+        src.close()
+    with rasterio.open(outfile, "w", **out_meta) as dest:
+        dest.write(out_image)
+    print('wrote {}'.format(outfile))
 
 def projectdf(df, projection1, projection2):
     """Reproject a dataframe's geometry column to new coordinate system
@@ -140,12 +216,11 @@ def project_raster(src_raster, dst_raster, dst_crs,
     from rasterio.warp import calculate_default_transform, reproject
 
     with rasterio.open(src_raster) as src:
-        print('reprojecting {} from {}, res: {:.2e}, {:.2e}\nto {}, res: {:.2e}, {:.2e}...'.format(
+        print('reprojecting {}...\nfrom:\n{}, res: {:.2e}, {:.2e}\n'.format(
                 src_raster,
                 src.crs.to_string(),
                 src.res[0], src.res[1],
-                dst_crs,
-                *resolution))
+                dst_crs), end='')
         affine, width, height = calculate_default_transform(
             src.crs, dst_crs, src.width, src.height, *src.bounds, resolution=resolution)
         kwargs = src.meta.copy()
@@ -158,6 +233,7 @@ def project_raster(src_raster, dst_raster, dst_crs,
             'driver': driver
         })
         with rasterio.open(dst_raster, 'w', **kwargs) as dst:
+            print('to:\n{}, res: {:.2e}, {:.2e}...'.format(dst.crs.to_string(), *dst.res))
             for i in range(1, src.count + 1):
                 reproject(
                     source=rasterio.band(src, i),
