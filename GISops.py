@@ -86,7 +86,7 @@ def clip_raster(inraster, features, outraster):
 
     with rasterio.open(inraster) as src:
         print('clipping {}...'.format(inraster))
-        out_image, out_transform = mask(src, geoms, crop=True)
+        out_image, out_transform = mask(src, geoms, crop=True, nodata=src.nodata)
         out_meta = src.meta.copy()
 
         out_meta.update({"driver": "GTiff",
