@@ -128,7 +128,8 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
 
         attributes = []
         # for reading in shapefiles
-        if shp_obj.schema['geometry'] != 'None':
+        meta = shp_obj.meta
+        if meta['schema']['geometry'] != 'None':
 
             if clip: # limit what is brought in to items in index of clipto
                 for line in shp_obj.filter(bbox=filter):
@@ -551,5 +552,24 @@ def _is_None(value):
         return True
     else:
         return False
-	
-	
+
+def arc_ascii(array, filename, xll=0, yll=0, cellsize=1.,
+              nodata=-9999, **kwargs):
+    """Write numpy array to Arc Ascii grid.
+
+    Parameters
+    ----------
+    kwargs: keyword arguments to np.savetxt
+    """
+    filename = '.'.join(filename.split('.')[:-1]) + '.asc'  # enforce .asc ending
+    nrow, ncol = array.shape
+    txt = 'ncols  {:d}\n'.format(ncol)
+    txt += 'nrows  {:d}\n'.format(nrow)
+    txt += 'xllcorner  {:f}\n'.format(xll)
+    txt += 'yllcorner  {:f}\n'.format(yll)
+    txt += 'cellsize  {}\n'.format(cellsize)
+    txt += 'NODATA_value  {:.0f}\n'.format(nodata)
+    with open(filename, 'w') as output:
+        output.write(txt)
+    with open(filename, 'ab') as output:
+        np.savetxt(output, array, **kwargs)
