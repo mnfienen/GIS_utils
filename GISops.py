@@ -99,9 +99,12 @@ def clip_raster(inraster, features, outraster):
             print('wrote {}'.format(outraster))
 
 def merge_rasters(inrasters, outfile):
+    rasterio = import_rasterio()
     from rasterio.merge import merge
+
     srces = []
     print('merging:')
+
     for file in inrasters:
         srces.append(rasterio.open(file))
         print('\t{}'.format(file))
