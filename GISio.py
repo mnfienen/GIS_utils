@@ -573,3 +573,4 @@ def arc_ascii(array, filename, xll=0, yll=0, cellsize=1.,
         output.write(txt)
     with open(filename, 'ab') as output:
         np.savetxt(output, array, **kwargs)
+    print('wrote {}'.format(filename))
