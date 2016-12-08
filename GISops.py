@@ -77,6 +77,29 @@ def d8flow(array, force_flow=False, fill_single=False):
     d8[gradient.min(axis=0) >= 0] = 0  # set cells with inward gradients to 0
     return d8
 
+def shaded_relief(elev, altitude=np.pi/4.,
+                  azimuth=np.pi/2.):
+    """
+    Make a shaded relief version of a numpy array.
+
+    Parameters
+    ----------
+    dem : 2D numpy array
+    altitude : float
+        Altitude of sun (in radians)
+    azimuth : float
+        Direction of sun (in radians)
+    """
+    x, y = np.gradient(elev)
+
+    slope = np.pi/2. - np.arctan(np.sqrt(x*x + y*y))
+    aspect = np.arctan2(-x, y)
+
+    shaded = np.sin(altitude) * np.sin(slope)\
+        + np.cos(altitude) * np.cos(slope)\
+        * np.cos((azimuth - np.pi/2.) - aspect)
+    return shaded
+
 def clip_raster(inraster, features, outraster):
 
     rasterio = import_rasterio() # check for rasterio
