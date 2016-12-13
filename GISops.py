@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
-
+import os
 import time
 import numpy as np
 import fiona
@@ -77,13 +77,59 @@ def d8flow(array, force_flow=False, fill_single=False):
     d8[gradient.min(axis=0) >= 0] = 0  # set cells with inward gradients to 0
     return d8
 
-def clip_raster(inraster, features, outraster):
+def clip_raster(inraster, features, outraster,
+                clip_feature_epsg=None, clip_feature_proj4=None):
 
-    rasterio = import_rasterio() # check for rasterio
-    from rasterio.mask import mask
+    rasterio = import_rasterio()
+    from fiona.crs import to_string
+    from shapely.geometry import box
 
+    # compare coordinates references for raster and clip feature
+    # (if the clip feature is a shapefile path)
+    with rasterio.open(inraster) as src:
+        raster_crs = to_string(src.crs)
+    if isinstance(features, str):
+        with fiona.open(features) as src2:
+            clip_crs = to_string(src2.crs)
+    elif isinstance(features, list):
+        if clip_feature_epsg is not None:
+            clip_crs = '+init:epsg:{}'.format(clip_feature_epsg)
+        elif clip_feature_proj4 is not None:
+            clip_crs = clip_feature_proj4
+
+    # convert the features to geojson
     geoms = _to_geojson(features)
 
+    # if the coordinate systems are not the same
+    # reproject the raster first before clipping
+    # this could be greatly sped up by first clipping the input raster prior to reprojecting
+    if raster_crs != clip_crs:
+        tmpraster = 'tmp.tif'
+        tmpraster2 = 'tmp2.tif'
+        print('Input raster and clip feature(s) are in different coordinate systems.\n'
+              'Input raster will be reprojected to the clip feature coordinate system.\n')'        # make prelim clip of raster to speed up reprojection
+        xmin, xmax, ymin, ymax = _get_bounds(geoms)
+        longest_side = np.max(xmax-xmin, ymax-ymin)
+        bounds = box(xmin, ymin, xmax, ymax).buffer(longest_side*0.1)
+        bounds = project(bounds, clip_crs, raster_crs)
+        _clip_raster(inraster, [bounds], tmpraster)
+        project_raster(tmpraster, tmpraster2, clip_crs)
+        inraster = tmpraster2
+
+    _clip_raster(inraster, geoms, outraster)
+
+    if raster_crs != clip_crs:
+        for tmp in [tmpraster, tmpraster2]:
+            if os.path.exists(tmp):
+                print('removing {}...'.format(tmp))
+                os.remove(tmp)
+    print('Done.')
+
+def _clip_raster(inraster, features, outraster):
+    # convert the features to geojson
+    geoms = _to_geojson(features)
+    rasterio = import_rasterio()  # check for rasterio
+    from rasterio.mask import mask
     with rasterio.open(inraster) as src:
         print('clipping {}...'.format(inraster))
         out_image, out_transform = mask(src, geoms, crop=True, nodata=src.nodata)
@@ -492,3 +538,14 @@ def _to_geojson(features):
             except:
                 raise TypeError('Unrecognized feature type')
     return geoms
+
+def _get_bounds(geojsoncollection):
+    xmin, xmax = 0, 0
+    ymin, ymax = 0, 0
+    for feature in geojsoncollection:
+        for crds in feature['coordinates']:
+            a = np.array(crds)
+            x, y = a[:, 0], a[:, 1]
+            xmin, xmax = np.min(x, xmin), np.max(x, xmax)
+            ymin, ymax = np.min(y, ymin), np.max(y, ymax)
+    return xmin, xmax, ymin, ymax
