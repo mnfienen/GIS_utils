@@ -129,7 +129,8 @@ def clip_raster(inraster, features, outraster,
         tmpraster = 'tmp.tif'
         tmpraster2 = 'tmp2.tif'
         print('Input raster and clip feature(s) are in different coordinate systems.\n'
-              'Input raster will be reprojected to the clip feature coordinate system.\n')'        # make prelim clip of raster to speed up reprojection
+              'Input raster will be reprojected to the clip feature coordinate system.\n')
+        # make prelim clip of raster to speed up reprojection
         xmin, xmax, ymin, ymax = _get_bounds(geoms)
         longest_side = np.max(xmax-xmin, ymax-ymin)
         bounds = box(xmin, ymin, xmax, ymax).buffer(longest_side*0.1)
