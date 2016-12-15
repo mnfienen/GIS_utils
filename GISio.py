@@ -73,6 +73,18 @@ def get_proj4(prj):
     proj4 = srs.ExportToProj4()
     return proj4
 
+def get_shapefile_bounds(shapefile):
+    xmin, xmax = 0, 0
+    ymin, ymax = 0, 0
+    with fiona.open(shapefile) as src:
+        for rec in src:
+            for crds in rec['geometry']['coordinates']:
+                a = np.array(crds)
+                x, y = a[:, 0], a[:, 1]
+                xmin, xmax = np.min(x, xmin), np.max(x, xmax)
+                ymin, ymax = np.min(y, ymin), np.max(y, ymax)
+    return xmin, xmax, ymin, ymax
+
 def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
            true_values=None, false_values=None,
            skip_empty_geom=True):
