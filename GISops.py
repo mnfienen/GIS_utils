@@ -3,7 +3,7 @@ from __future__ import print_function
 
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
-
+import collections
 import time
 import numpy as np
 import fiona
@@ -198,7 +198,7 @@ def project(geom, projection1, projection2):
     project = partial(pyproj.transform, pr1, pr2)
 
     # do the transformation!
-    if isinstance(geom, list):
+    if isinstance(geom, collections.Iterable):
         return [transform(project, g) for g in geom]
     return transform(project, geom)
 

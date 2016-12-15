@@ -4,6 +4,20 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+def test_project():
+    from GISops import project
+    from shapely.geometry import Point
+
+    points = map(Point, zip(range(5), range(5)))
+    result = project(points, '+init=epsg:26916', '+init=epsg:4269')
+    pointsl = list(zip(np.linspace(3e5, 4e5, 10), np.linspace(5e6, 5.1e6, 10)))
+    points = np.array(list(map(Point, pointsl)), dtype=object)
+    result = project(points, '+init=epsg:26916', '+init=epsg:4269')
+    result_inv = project(result, '+init=epsg:4269', '+init=epsg:26916')
+    result_inva = np.array([np.squeeze(p.xy) for p in result_inv])
+    assert (np.array(pointsl)- result_inva).sum() < 1e-6
+
 def test_contour2shp():
     from GISops import contour2shp
 
@@ -24,4 +38,5 @@ def test_contour2shp():
 if __name__ == '__main__':
     if not os.path.isdir('temp'):
         os.makedirs('temp')
-    test_contour2shp()
+    test_project()
+    #test_contour2shp()
