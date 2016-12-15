@@ -179,7 +179,7 @@ def project(geom, projection1, projection2):
 
     Parameters
     ----------
-    geom: shapely geometry object
+    geom: shapely geometry object or list of shapely geometry objects
     projection1: string
         Proj4 string specifying source projection
     projection2: string
@@ -198,6 +198,8 @@ def project(geom, projection1, projection2):
     project = partial(pyproj.transform, pr1, pr2)
 
     # do the transformation!
+    if isinstance(geom, list):
+        return [transform(project, g) for g in geom]
     return transform(project, geom)
 
 def project_raster(src_raster, dst_raster, dst_crs,
