@@ -1,5 +1,6 @@
 """Test shapely functionality"""
 
+import cartopy
 import fiona
 import os
 import shapely
@@ -36,6 +37,11 @@ def test_buffer():
 if __name__ == '__main__':
     if not os.path.isdir('temp'):
         os.makedirs('temp')
+    try:
+        print(cartopy.__version__)
+    except:
+        pass
+    print(fiona.__version__)
     print(shapely.__version__)
     print(geos_version)
     test_buffer()
