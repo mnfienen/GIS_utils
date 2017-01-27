@@ -116,13 +116,13 @@ def clip_raster(inraster, features, outraster,
             clip_crs = to_string(src2.crs)
     elif isinstance(features, list):
         if clip_feature_epsg is not None:
-            clip_crs = '+init:epsg:{}'.format(clip_feature_epsg)
+            clip_crs = '+init=epsg:{}'.format(clip_feature_epsg)
         elif clip_feature_proj4 is not None:
             clip_crs = clip_feature_proj4
 
     # convert the features to geojson
     geoms = _to_geojson(features)
-
+    print(raster_crs, clip_crs)
     # if the coordinate systems are not the same
     # reproject the raster first before clipping
     # this could be greatly sped up by first clipping the input raster prior to reprojecting
@@ -133,7 +133,7 @@ def clip_raster(inraster, features, outraster,
               'Input raster will be reprojected to the clip feature coordinate system.\n')
         # make prelim clip of raster to speed up reprojection
         xmin, xmax, ymin, ymax = _get_bounds(geoms)
-        longest_side = np.max(xmax-xmin, ymax-ymin)
+        longest_side = np.max([xmax-xmin, ymax-ymin])
         bounds = box(xmin, ymin, xmax, ymax).buffer(longest_side*0.1)
         bounds = project(bounds, clip_crs, raster_crs)
         _clip_raster(inraster, [bounds], tmpraster)
