@@ -163,6 +163,11 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
                 shp_df = shp_df[list(attributes[0].keys())]
 
             # handle null geometries
+            if len(shp_df) == 0:
+                print('Empty dataframe! No features were read.')
+                if filter is not None:
+                    print('Check filter {} for consistency \
+with shapefile coordinate system'.format(filter))
             geoms = shp_df.geometry.tolist()
             if geoms.count(None) == 0:
                 shp_df['geometry'] = [shape(g) for g in geoms]

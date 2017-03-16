@@ -10,7 +10,7 @@ import numpy as np
 import fiona
 from shapely.geometry import Point, LineString, shape, asLineString, mapping
 from shapely import affinity
-from shapely.ops import cascaded_union, transform
+from shapely.ops import unary_union, transform
 from functools import partial
 import pyproj
 import pandas as pd
@@ -102,7 +102,20 @@ def shaded_relief(elev, altitude=np.pi/4.,
     return shaded
 
 def clip_raster(inraster, features, outraster,
-                clip_feature_epsg=None, clip_feature_proj4=None):
+                clip_feature_epsg=None, clip_feature_proj4=None,
+                **kwargs):
+    """Clip a raster to feature extent(s).
+
+    Parameters
+    ----------
+    kwargs : key word arguments to project_raster
+        These are only used if the clip features are
+        in a different coordinate system, in which case
+        the raster will be reprojected into that coordinate
+        system.
+    
+
+    """
     rasterio = import_rasterio()
     from fiona.crs import to_string
     from shapely.geometry import box
@@ -137,7 +150,7 @@ def clip_raster(inraster, features, outraster,
         bounds = box(xmin, ymin, xmax, ymax).buffer(longest_side*0.1)
         bounds = project(bounds, clip_crs, raster_crs)
         _clip_raster(inraster, [bounds], tmpraster)
-        project_raster(tmpraster, tmpraster2, clip_crs)
+        project_raster(tmpraster, tmpraster2, clip_crs, **kwargs)
         inraster = tmpraster2
 
     _clip_raster(inraster, geoms, outraster)
@@ -430,34 +443,39 @@ def intersect_brute_force(geom1, geom2):
     return isfr
 
 
-def dissolve(inshp, outshp, dissolve_attribute):
-    df = GISio.shp2df(shp, geometry=True)
+def dissolve(inshp, outshp, dissolve_attribute=None):
+    df = GISio.shp2df(inshp)
     
     df_out = dissolve_df(df, dissolve_attribute)
     
     # write dissolved polygons to new shapefile
-    GISio.df2shp(df_out, outshp, 'geometry', inshp[:-4]+'.prj')
+    GISio.df2shp(df_out, outshp, prj=inshp[:-4]+'.prj')
 
 
-def dissolve_df(in_df, dissolve_attribute):
-    
-    print("dissolving DataFrame on {}".format(dissolve_attribute))
-    # unique attributes on which to make the dissolve
-    dissolved_items = list(np.unique(in_df[dissolve_attribute]))
-    
-    # go through unique attributes, combine the geometries, and populate new DataFrame
-    df_out = pd.DataFrame()
-    length = len(dissolved_items)
-    knt = 0
-    for item in dissolved_items:
-        df_item = in_df[in_df[dissolve_attribute] == item]
-        geometries = list(df_item.geometry)
-        dissolved = cascaded_union(geometries)
-        dict = {dissolve_attribute: item, 'geometry': dissolved}
-        df_out = df_out.append(dict, ignore_index=True)
-        knt +=1
-        print('\r{:d}%'.format(100*knt/length))
-        
+def dissolve_df(in_df, dissolve_attribute=None):
+
+    if dissolve_attribute is not None:
+        print("dissolving DataFrame on {}".format(dissolve_attribute))
+        # unique attributes on which to make the dissolve
+
+
+        dissolved_items = list(np.unique(in_df[dissolve_attribute]))
+
+        # go through unique attributes, combine the geometries, and populate new DataFrame
+        df_out = pd.DataFrame()
+        length = len(dissolved_items)
+        knt = 0
+        for item in dissolved_items:
+            df_item = in_df[in_df[dissolve_attribute] == item]
+            geometries = list(df_item.geometry)
+            dissolved = unary_union(geometries)
+            dict = {dissolve_attribute: item, 'geometry': dissolved}
+            df_out = df_out.append(dict, ignore_index=True)
+            knt +=1
+            print('\r{:d}%'.format(100*knt/length))
+    else:
+        dissolved = unary_union(in_df.geometry.values)
+        df_out = pd.DataFrame([{'geometry': dissolved}])
     return df_out
 
 def contour2shp(contours, outshape='contours.shp', 
