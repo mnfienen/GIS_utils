@@ -184,6 +184,25 @@ def _clip_raster(inraster, features, outraster):
             print('wrote {}'.format(outraster))
 
 def merge_rasters(inrasters, outfile):
+    """Merge a collection of rasters together into one raster.
+
+    Parameters
+    ----------
+    inrasters: list
+    outfile: output raster name
+
+    Notes
+    -----
+    Output raster format is GeoTiff (.tif extension)
+
+    Rasterio uses the affine package to define the raster's
+    position in space and handle coordinate transformations, etc.
+    Affine 1.2 apparently had an issue where rasters in geographic coordinates
+    (lat-lon) would produce an error in the raster.merge.merge method because
+    the determinant of the transformation matrix was very small (9e-5 x 9e-5 for a 10m dem).
+    This issue appears to have been fixed in affine 2.0 (pip install affine==2.0 should resolve
+    the issue).
+    """
     rasterio = import_rasterio()
     from rasterio.merge import merge
 
