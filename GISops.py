@@ -122,8 +122,10 @@ def clip_raster(inraster, features, outraster,
 
     # compare coordinates references for raster and clip feature
     # (if the clip feature is a shapefile path)
+
     with rasterio.open(inraster) as src:
         raster_crs = to_string(src.crs)
+        clip_crs = raster_crs # start with assumption of same coordinates
     if isinstance(features, str):
         with fiona.open(features) as src2:
             clip_crs = to_string(src2.crs)
