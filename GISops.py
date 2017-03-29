@@ -10,7 +10,7 @@ import numpy as np
 import fiona
 from shapely.geometry import Point, LineString, shape, asLineString, mapping
 from shapely import affinity
-from shapely.ops import cascaded_union, transform
+from shapely.ops import unary_union, transform
 from functools import partial
 import pyproj
 import pandas as pd
@@ -102,27 +102,42 @@ def shaded_relief(elev, altitude=np.pi/4.,
     return shaded
 
 def clip_raster(inraster, features, outraster,
-                clip_feature_epsg=None, clip_feature_proj4=None):
+                clip_feature_epsg=None, clip_feature_proj4=None,
+                **kwargs):
+    """Clip a raster to feature extent(s).
+
+    Parameters
+    ----------
+    kwargs : key word arguments to project_raster
+        These are only used if the clip features are
+        in a different coordinate system, in which case
+        the raster will be reprojected into that coordinate
+        system.
+    
+
+    """
     rasterio = import_rasterio()
     from fiona.crs import to_string
     from shapely.geometry import box
 
     # compare coordinates references for raster and clip feature
     # (if the clip feature is a shapefile path)
+
     with rasterio.open(inraster) as src:
         raster_crs = to_string(src.crs)
+        clip_crs = raster_crs # start with assumption of same coordinates
     if isinstance(features, str):
         with fiona.open(features) as src2:
             clip_crs = to_string(src2.crs)
     elif isinstance(features, list):
         if clip_feature_epsg is not None:
-            clip_crs = '+init:epsg:{}'.format(clip_feature_epsg)
+            clip_crs = '+init=epsg:{}'.format(clip_feature_epsg)
         elif clip_feature_proj4 is not None:
             clip_crs = clip_feature_proj4
 
     # convert the features to geojson
     geoms = _to_geojson(features)
-
+    print(raster_crs, clip_crs)
     # if the coordinate systems are not the same
     # reproject the raster first before clipping
     # this could be greatly sped up by first clipping the input raster prior to reprojecting
@@ -133,11 +148,11 @@ def clip_raster(inraster, features, outraster,
               'Input raster will be reprojected to the clip feature coordinate system.\n')
         # make prelim clip of raster to speed up reprojection
         xmin, xmax, ymin, ymax = _get_bounds(geoms)
-        longest_side = np.max(xmax-xmin, ymax-ymin)
+        longest_side = np.max([xmax-xmin, ymax-ymin])
         bounds = box(xmin, ymin, xmax, ymax).buffer(longest_side*0.1)
         bounds = project(bounds, clip_crs, raster_crs)
         _clip_raster(inraster, [bounds], tmpraster)
-        project_raster(tmpraster, tmpraster2, clip_crs)
+        project_raster(tmpraster, tmpraster2, clip_crs, **kwargs)
         inraster = tmpraster2
 
     _clip_raster(inraster, geoms, outraster)
@@ -169,6 +184,25 @@ def _clip_raster(inraster, features, outraster):
             print('wrote {}'.format(outraster))
 
 def merge_rasters(inrasters, outfile):
+    """Merge a collection of rasters together into one raster.
+
+    Parameters
+    ----------
+    inrasters: list
+    outfile: output raster name
+
+    Notes
+    -----
+    Output raster format is GeoTiff (.tif extension)
+
+    Rasterio uses the affine package to define the raster's
+    position in space and handle coordinate transformations, etc.
+    Affine 1.2 apparently had an issue where rasters in geographic coordinates
+    (lat-lon) would produce an error in the raster.merge.merge method because
+    the determinant of the transformation matrix was very small (9e-5 x 9e-5 for a 10m dem).
+    This issue appears to have been fixed in affine 2.0 (pip install affine==2.0 should resolve
+    the issue).
+    """
     rasterio = import_rasterio()
     from rasterio.merge import merge
 
@@ -430,34 +464,39 @@ def intersect_brute_force(geom1, geom2):
     return isfr
 
 
-def dissolve(inshp, outshp, dissolve_attribute):
-    df = GISio.shp2df(shp, geometry=True)
+def dissolve(inshp, outshp, dissolve_attribute=None):
+    df = GISio.shp2df(inshp)
     
     df_out = dissolve_df(df, dissolve_attribute)
     
     # write dissolved polygons to new shapefile
-    GISio.df2shp(df_out, outshp, 'geometry', inshp[:-4]+'.prj')
+    GISio.df2shp(df_out, outshp, prj=inshp[:-4]+'.prj')
 
 
-def dissolve_df(in_df, dissolve_attribute):
-    
-    print("dissolving DataFrame on {}".format(dissolve_attribute))
-    # unique attributes on which to make the dissolve
-    dissolved_items = list(np.unique(in_df[dissolve_attribute]))
-    
-    # go through unique attributes, combine the geometries, and populate new DataFrame
-    df_out = pd.DataFrame()
-    length = len(dissolved_items)
-    knt = 0
-    for item in dissolved_items:
-        df_item = in_df[in_df[dissolve_attribute] == item]
-        geometries = list(df_item.geometry)
-        dissolved = cascaded_union(geometries)
-        dict = {dissolve_attribute: item, 'geometry': dissolved}
-        df_out = df_out.append(dict, ignore_index=True)
-        knt +=1
-        print('\r{:d}%'.format(100*knt/length))
-        
+def dissolve_df(in_df, dissolve_attribute=None):
+
+    if dissolve_attribute is not None:
+        print("dissolving DataFrame on {}".format(dissolve_attribute))
+        # unique attributes on which to make the dissolve
+
+
+        dissolved_items = list(np.unique(in_df[dissolve_attribute]))
+
+        # go through unique attributes, combine the geometries, and populate new DataFrame
+        df_out = pd.DataFrame()
+        length = len(dissolved_items)
+        knt = 0
+        for item in dissolved_items:
+            df_item = in_df[in_df[dissolve_attribute] == item]
+            geometries = list(df_item.geometry)
+            dissolved = unary_union(geometries)
+            dict = {dissolve_attribute: item, 'geometry': dissolved}
+            df_out = df_out.append(dict, ignore_index=True)
+            knt +=1
+            print('\r{:d}%'.format(100*knt/length))
+    else:
+        dissolved = unary_union(in_df.geometry.values)
+        df_out = pd.DataFrame([{'geometry': dissolved}])
     return df_out
 
 def contour2shp(contours, outshape='contours.shp', 
