@@ -10,17 +10,18 @@ import platform
 from subprocess import Popen, PIPE
 
 cmds = []
+channel = 'conda-forge'
 # set up conda
 cmds.append('conda config --set ssl_verify false')
 cmds.append('conda update conda -y')
-cmds.append('conda config --add channels conda-forge')
-cmds.append('conda config --add channels defaults')
+#cmds.append('conda config --add channels conda-forge')
+#cmds.append('conda config --add channels defaults')
 cmds.append('conda config --set show_channel_urls true')
 # create new environment for the gis packages
-packages2install = 'ipython jupyter numpy scipy matplotlib pandas=0.18 datashader '
+packages2install = 'ipython jupyter numpy scipy matplotlib pandas datashader '
 packages2install += 'gdal fiona shapely rasterio rtree pyproj netcdf4 rasterstats pyshp '
 packages2install += 'basemap descartes cartopy nose'
-cmds.append('conda create -n gis python {} -y'.format(packages2install))
+cmds.append('conda create -n gis -c {} python {} -y'.format(channel, packages2install))
 
 for cmd in cmds: 
     print(cmd)
