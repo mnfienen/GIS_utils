@@ -578,6 +578,9 @@ def arc_ascii(array, filename, xll=0, yll=0, cellsize=1.,
     ----------
     kwargs: keyword arguments to np.savetxt
     """
+    array = array.copy()
+    array[np.isnan(array)] = nodata
+
     filename = '.'.join(filename.split('.')[:-1]) + '.asc'  # enforce .asc ending
     nrow, ncol = array.shape
     txt = 'ncols  {:d}\n'.format(ncol)
