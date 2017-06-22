@@ -269,7 +269,7 @@ def project(geom, projection1, projection2):
     """
     # check for x, y values instead of shapely objects
     if isinstance(geom, tuple):
-        return np.squeeze([projectXY(*geom, projection1, projection2)])
+        return np.squeeze([projectXY(geom[0], geom[1], projection1, projection2)])
 
     if isinstance(geom, collections.Iterable):
         geom = list(geom) # in case it's a generator
