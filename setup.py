@@ -1,18 +1,16 @@
-from distutils.core import setup
+from setuptools import setup
 
-DESCRIPTION = """\
-Convenience functions for transferring information between shapefiles, 
-pandas dataframes, and csv or Excel files. Also for GIS operations
-in pandas (in development).
-"""
 
 def run():
     setup(name="GIS_utils",
           version="0.1",
-          description="GIS with pandas",
+          description="Convenience functions for working with common GIS formats",
           author="Andy Leaf",
-          packages=[""],
-          long_descripton=DESCRIPTION,
+          author_email='jlawhead@geospatialpython.com',
+          url='https://github.com/GeospatialPython/pyshp',
+          download_url='https://github.com/GeospatialPython/pyshp/archive/1.2.10.tar.gz',
+          py_modules=['GISio', 'GISops'],
+          zip_safe=False
           )
           
 if __name__ == "__main__":

@@ -260,15 +260,33 @@ def project(geom, projection1, projection2):
 
     Parameters
     ----------
-    geom: shapely geometry object or list of shapely geometry objects
+    geom: shapely geometry object, list of shapely geometry objects, 
+          list of (x, y) tuples, or (x, y) tuple.
     projection1: string
         Proj4 string specifying source projection
     projection2: string
         Proj4 string specifying destination projection
     """
+    # check for x, y values instead of shapely objects
+    if isinstance(geom, tuple):
+        return np.squeeze([projectXY(geom[0], geom[1], projection1, projection2)])
+
+    if isinstance(geom, collections.Iterable):
+        geom = list(geom) # in case it's a generator
+        geom0 = geom[0]
+    else:
+        geom0 = geom
+
+    if isinstance(geom0, tuple):
+        a = np.array(geom)
+        x = a[:, 0]
+        y = a[:, 1]
+        return np.squeeze([projectXY(x, y, projection1, projection2)])
+
+    # transform shapely objects
+    # enforce strings
     projection1 = str(projection1)
     projection2 = str(projection2)
-
 
     # define projections
     pr1 = pyproj.Proj(projection1, errcheck=True, preserve_units=True)
@@ -282,6 +300,28 @@ def project(geom, projection1, projection2):
     if isinstance(geom, collections.Iterable):
         return [transform(project, g) for g in geom]
     return transform(project, geom)
+
+def projectXY(x, y, projection1, projection2):
+    """Project x and y coordinates to different crs
+    
+    Parameters
+    ----------
+    x: scalar or 1-D array
+    x: scalar or 1-D array
+    projection1: string
+        Proj4 string specifying source projection
+    projection2: string
+        Proj4 string specifying destination projection
+    """
+    projection1 = str(projection1)
+    projection2 = str(projection2)
+
+    # define projections
+    pr1 = pyproj.Proj(projection1, errcheck=True, preserve_units=True)
+    pr2 = pyproj.Proj(projection2, errcheck=True, preserve_units=True)
+
+    return pyproj.transform(pr1, pr2, x, y)
+
 
 def project_raster(src_raster, dst_raster, dst_crs,
                    resampling=1, resolution=None, num_threads=2,

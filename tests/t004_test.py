@@ -1,6 +1,6 @@
 """Test shapely functionality"""
 
-import cartopy
+#import cartopy
 import fiona
 import os
 import shapely
