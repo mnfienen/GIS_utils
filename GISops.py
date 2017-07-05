@@ -212,7 +212,7 @@ def merge_rasters(inrasters, outfile):
     for file in inrasters:
         srces.append(rasterio.open(file))
         print('\t{}'.format(file))
-    out_image, out_trans = merge(srces, nodata=0)
+    out_image, out_trans = merge(srces)
 
     out_meta = srces[0].meta.copy()
     out_meta.update({"driver": "GTiff",
