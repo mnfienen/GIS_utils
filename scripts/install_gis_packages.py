@@ -23,9 +23,9 @@ packages2install += 'gdal fiona shapely rasterio rtree pyproj netcdf4 rasterstat
 packages2install += 'basemap descartes cartopy nose'
 cmds.append('conda create -n gis -c {} python {} -y'.format(channel, packages2install))
 
-for cmd in cmds: 
-    print(cmd)
-    os.system(cmd)
+#for cmd in cmds: 
+#    print(cmd)
+#    os.system(cmd)
 
 # download the DOI certificate (needed for using pip within the DOI network)
 # this saves it to the current folder
