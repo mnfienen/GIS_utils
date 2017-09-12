@@ -86,14 +86,15 @@ def get_shapefile_bounds(shapefile):
     return xmin, xmax, ymin, ymax
 
 def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
-           true_values=None, false_values=None,
+           true_values=None, false_values=None, layer=None,
            skip_empty_geom=True):
-    """Read shapefile into pandas DataFrame.
+    """Read shapefile/DBF, list of shapefiles/DBFs, or File geodatabase (GDB)
+     into pandas DataFrame.
 
     Parameters
     ----------
     shplist : string or list
-        of shapefile name(s)
+        of shapefile/DBF name(s) or FileGDB
     index : string
         Column to use as index for dataframe
     index_dtype : dtype
@@ -107,6 +108,8 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
         same as argument for pandas read_csv
     false_values : list
         same as argument for pandas read_csv
+    layer : str
+        Layer name to read (if opening FileGDB)
     skip_empty_geom : True/False, default True
         Drops shapefile entries with null geometries.
         DBF files (which specify null geometries in their schema) will still be read.
@@ -131,7 +134,7 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
     df = pd.DataFrame()
     for shp in shplist:
         print("\nreading {}...".format(shp))
-        shp_obj = fiona.open(shp, 'r')
+        shp_obj = fiona.open(shp, 'r', layer=layer)
 
         if index is not None:
             # handle capitolization issues with index field name
