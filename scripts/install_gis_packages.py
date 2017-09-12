@@ -18,10 +18,12 @@ cmds.append('conda update conda -y')
 #cmds.append('conda config --add channels defaults')
 cmds.append('conda config --set show_channel_urls true')
 # create new environment for the gis packages
-packages2install = 'ipython jupyter numpy scipy matplotlib pandas datashader '
-packages2install += 'gdal fiona shapely rasterio rtree pyproj netcdf4 rasterstats pyshp '
-packages2install += 'basemap descartes cartopy nose'
-cmds.append('conda create -n gis -c {} python {} -y'.format(channel, packages2install))
+#packages2install = 'ipython jupyter numpy scipy matplotlib pandas datashader '
+#packages2install += 'gdal fiona shapely rasterio rtree pyproj netcdf4 rasterstats pyshp '
+#packages2install += 'basemap descartes cartopy nose'
+#cmds.append('conda create -n gis -c {} python {} -y'.format(channel, packages2install))
+
+os.system('conda env create -f gis.yml')
 
 #for cmd in cmds: 
 #    print(cmd)
@@ -52,7 +54,7 @@ def get_gis_env_path():
 # pip installs
 url = 'http://internal.usgs.gov/oei/wp-content/itsec/DOIRootCA2.cer'
 pips = [get_gis_env_path(), '-m']
-pips += ['pip', 'install']
+pips = ['pip', 'install']
 pips += ['https://github.com/aleaf/GIS_utils/archive/master.zip']
 pips += ["""--cert={}""".format(os.path.split(url)[-1])] # use the certificate file name from url above
 
