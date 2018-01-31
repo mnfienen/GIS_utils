@@ -85,6 +85,32 @@ def get_shapefile_bounds(shapefile):
                 ymin, ymax = np.min(y, ymin), np.max(y, ymax)
     return xmin, xmax, ymin, ymax
 
+def get_photo_location(photos):
+    """Get locations for georeferenced photos using python image library.
+
+    Parameters
+    ----------
+    photos : list of strings
+
+    Returns
+    -------
+    locations : lon, lat tuple or list of lon, lat tuples
+    """
+    import PIL.Image
+    from get_lat_lon_exif_pil import get_exif_data, get_lat_lon
+    if isinstance(photos, str):
+        photos = [photos]
+
+    locations = []
+    for photo in photos:
+        img = PIL.Image.open(photo)  # load an image through PIL's Image object
+        exif_data = get_exif_data(img)
+        locations.append(get_lat_lon(exif_data))
+    if len(locations) == 1:
+        return locations[0]
+    elif len(locations) > 1:
+        return locations
+
 def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
            true_values=None, false_values=None, layer=None,
            skip_empty_geom=True):

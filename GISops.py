@@ -103,11 +103,14 @@ def shaded_relief(elev, altitude=np.pi/4.,
 
 def clip_raster(inraster, features, outraster,
                 clip_feature_epsg=None, clip_feature_proj4=None,
-                **kwargs):
+                clip_kwargs={},
+                **project_kwargs):
     """Clip a raster to feature extent(s).
 
     Parameters
     ----------
+    clip_kwargs: dict
+        Keyword arguments to rasterio.mask
     kwargs : key word arguments to project_raster
         These are only used if the clip features are
         in a different coordinate system, in which case
@@ -137,7 +140,8 @@ def clip_raster(inraster, features, outraster,
 
     # convert the features to geojson
     geoms = _to_geojson(features)
-    print(raster_crs, clip_crs)
+    print('input raster crs:\n{}\n\n'.format(raster_crs),
+          'clip feature crs:\n{}\n'.format(clip_crs))
     # if the coordinate systems are not the same
     # reproject the raster first before clipping
     # this could be greatly sped up by first clipping the input raster prior to reprojecting
@@ -151,11 +155,11 @@ def clip_raster(inraster, features, outraster,
         longest_side = np.max([xmax-xmin, ymax-ymin])
         bounds = box(xmin, ymin, xmax, ymax).buffer(longest_side*0.1)
         bounds = project(bounds, clip_crs, raster_crs)
-        _clip_raster(inraster, [bounds], tmpraster)
-        project_raster(tmpraster, tmpraster2, clip_crs, **kwargs)
+        _clip_raster(inraster, [bounds], tmpraster, **clip_kwargs)
+        project_raster(tmpraster, tmpraster2, clip_crs, **project_kwargs)
         inraster = tmpraster2
 
-    _clip_raster(inraster, geoms, outraster)
+    _clip_raster(inraster, geoms, outraster, **clip_kwargs)
 
     if raster_crs != clip_crs:
         for tmp in [tmpraster, tmpraster2]:
@@ -164,14 +168,20 @@ def clip_raster(inraster, features, outraster,
                 os.remove(tmp)
     print('Done.')
 
-def _clip_raster(inraster, features, outraster):
+def _clip_raster(inraster, features, outraster, **kwargs):
+
     # convert the features to geojson
     geoms = _to_geojson(features)
     rasterio = import_rasterio()  # check for rasterio
     from rasterio.mask import mask
     with rasterio.open(inraster) as src:
         print('clipping {}...'.format(inraster))
-        out_image, out_transform = mask(src, geoms, crop=True, nodata=src.nodata)
+
+        defaults = {'crop': True,
+                    'nodata': src.nodata}
+        defaults.update(kwargs)
+
+        out_image, out_transform = mask(src, geoms, **defaults)
         out_meta = src.meta.copy()
 
         out_meta.update({"driver": "GTiff",
