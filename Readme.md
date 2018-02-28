@@ -72,5 +72,6 @@ from GISops import intersect_rtree
 intersect_rtree(geom1, geom2)
 ```
 result: 
-```[[ind1, ind2, ind3...], [ind1, ind2...]...]
+```python
+[[ind1, ind2, ind3...], [ind1, ind2...]...]
 ```
