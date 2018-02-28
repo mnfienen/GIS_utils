@@ -1,7 +1,9 @@
 # GIS_utils
 `GIS_utils` is a collection of convenience functions for working with the python GIS toolchain, including the **`fiona`**, **`shapely`**, **`rasterio`**, **`pyproj`**, and **`rtree`** packages. It contains two primary modules:   
-	**`GISio`**, which reads and writes information to/from GIS file formats, and  
-	**`GISops`**, which can perform operations such as clipping, reprojection and intersections.
+
+* **`GISio`**, which reads and writes information to/from GIS file formats, and  
+
+*	**`GISops`**, which can perform operations such as clipping, reprojection and intersections.
 
 
 
@@ -55,4 +57,19 @@ project(geom, '+init=epsg:4269', '+init=epsg:26715')
 result:
 ```
 POLYGON ((736463.2087751778 4987116.504596788, 732312.4084356854 5098212.402173721, 809739.8330817271 5101618.329562293, 815279.1881284819 4990525.071498179, 736463.2087751778 4987116.504596788))
+```
+
+#### Intersections using `rtree`
+Given lists of `shapely.geometry` objects (**`geom1`** and **`geom2`**), get the indices of the objects in **`geom1`** that intersect each object in **`geom2`**. Three steps are performed:
+
+1) A spatial index (`rtree.index.Index()`) is created for the bounding boxes of items in **`geom1`**.  
+2) Bounding boxes for the items in **`geom2`** are intersected with the spatial index.  
+3) Intersections from step 2 are tested using the actual **`shapely`** geometries using the `.intersects()` method.
+
+```python
+from GISops import intersect_rtree
+intersect_rtree(geom1, geom2)
+```
+result: 
+```[[ind1, ind2, ind3...], [ind1, ind2...]...]
 ```
