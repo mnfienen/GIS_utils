@@ -73,6 +73,11 @@ def test_integer_dtypes():
     for i in range(3):
         assert isinstance(d[i][0], int)
 
+    df = pd.DataFrame({'r': np.arange(100), 'c': np.arange(100)})
+    df2shp(df, 'temp/ints.dbf')
+    df2 = shp2df('temp/ints.dbf')
+    assert True
+
 def test_large_integers():
 
     # (e.g. USGS GW site numbers)
@@ -84,8 +89,8 @@ def test_large_integers():
 if __name__ == '__main__':
     if not os.path.isdir('temp'):
         os.makedirs('temp')
-    test_imports()
-    test_shp_properties()
-    test_shp_read_and_write()
+    #test_imports()
+    #test_shp_properties()
+    #test_shp_read_and_write()
     test_integer_dtypes()
-    test_large_integers()
+    #test_large_integers()
