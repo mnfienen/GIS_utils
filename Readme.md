@@ -25,7 +25,8 @@ import GISops
 
 ## Examples
 #### Read a shapefile or .dbf file into a `pandas DataFrame`:
-geometry information for each feature is stored in a geometry column as a **`shapely`** object.
+* geometry information for each feature is stored in a geometry column as a **`shapely`** object.
+* a collection of shapefiles can be read by supplying a list instead of a single file path.
 
 ```python
 from GISio import shp2df
