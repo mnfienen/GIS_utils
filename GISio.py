@@ -57,13 +57,6 @@ def get_proj4(prj):
     proj4 string (http://trac.osgeo.org/proj/)
 
     """
-    '''
-    Using fiona (couldn't figure out how to do this with just a prj file)
-    from fiona.crs import to_string
-    c = fiona.open(shp).crs
-    proj4 = to_string(c)
-    '''
-    # using osgeo
     from osgeo import osr
 
     prjfile = prj[:-4] + '.prj' # allows shp or prj to be argued
@@ -97,7 +90,7 @@ def get_photo_location(photos):
     locations : lon, lat tuple or list of lon, lat tuples
     """
     import PIL.Image
-    from get_lat_lon_exif_pil import get_exif_data, get_lat_lon
+    from .get_lat_lon_exif_pil import get_exif_data, get_lat_lon
     if isinstance(photos, str):
         photos = [photos]
 
