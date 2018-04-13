@@ -1,0 +1,34 @@
+name: gis2
+channels:
+- conda-forge
+- defaults
+- conda-forge/label/dev
+dependencies:
+- python=3.6
+- jupyter 
+- notebook
+- pandas 
+- xarray
+- xlrd
+- scipy
+- matplotlib 
+- gdal 
+- fiona 
+- shapely 
+- rasterio=1.*
+- rasterstats
+- pyproj 
+- cartopy 
+- basemap 
+- descartes 
+- netcdf4 
+- rtree 
+- nose 
+- lxml
+- folium
+- mplleaflet
+- pyshp
+- flopy
+- nose
+prefix: /Users/aleaf/anaconda/envs/gis2
+
