@@ -5,7 +5,8 @@
 
 *	**`GISops`**, which can perform operations such as clipping, reprojection and intersections.
 
-
+#### Dependencies:
+the above packages, and more, can be installed to a separate conda environment via the script in the [installing\_gis_packages](https://github.com/aleaf/GIS_utils/tree/master/installing_gis_packages) folder.
 
 ### To install:
 Clone or download the repository, and then from a command prompt in the repository folder:
