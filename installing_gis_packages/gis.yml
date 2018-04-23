@@ -1,4 +1,4 @@
-name: gis2
+name: gis
 channels:
 - conda-forge
 - defaults
@@ -30,5 +30,5 @@ dependencies:
 - pyshp
 - flopy
 - nose
-prefix: /Users/aleaf/anaconda/envs/gis2
+prefix: /Users/aleaf/anaconda/envs/gis
 

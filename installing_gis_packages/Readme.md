@@ -5,7 +5,7 @@
 2) at the command line:
 
 ```
-$ python install_packages.py gis_simple.yml
+$ python install_packages.py gis.yml
 ```
 
 Note that when python is called at the command line, the Anaconda version should come up (indicated by the text above the `>>>` after running `$ python `)
