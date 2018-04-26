@@ -164,7 +164,8 @@ def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
         # for reading in shapefiles
         meta = shp_obj.meta
         if meta['schema']['geometry'] != 'None':
-
+            if filter is not None:
+                print('filtering on bounding box {}, {}, {}, {}...'.format(*filter))
             if clip: # limit what is brought in to items in index of clipto
                 for line in shp_obj.filter(bbox=filter):
                     props = line['properties']
