@@ -496,7 +496,8 @@ def linestring_shpfromdf(df, shpname, IDname, Xname, Yname, Zname, prj, aggregat
                           'geometry': mapping(linestring)})
     shutil.copyfile(prj, "{}.prj".format(shpname[:-4]))
 
-def get_values_at_points(rasterfile, points):
+
+def get_values_at_points(rasterfile, x=None, y=None):
     """Get raster values single point or list of points.
     Points must be in same coordinate system as raster.
 
@@ -504,7 +505,11 @@ def get_values_at_points(rasterfile, points):
     ----------
     rasterfile : str
         Filename of raster.
-    points : tuple or list of tuples
+    x : 1D array
+        X coordinate locations
+    y : 1D array
+        Y coordinate locations
+    points : list of tuples or 2D numpy array (npoints, (row, col))
         Points at which to sample raster.
 
     Returns
@@ -519,15 +524,53 @@ def get_values_at_points(rasterfile, points):
         import gdal
     except:
         print('This function requires gdal.')
-    if isinstance(points, tuple):
-        points = [points]
-    gdata = gdal.Open(rasterfile)
-    gt = gdata.GetGeoTransform()
-    data = gdata.ReadAsArray().astype(np.float)
 
-    return [data[int((p[1] - gt[3])/gt[5]), int((p[0] - gt[0])/gt[1])]
-            for p in points]
-    
+    if x is not None and isinstance(x[0], tuple):
+        x, y = np.squeeze(np.array(x))
+        warnings.warn(
+            "new argument input for get_values_at_points is x, y, or points",
+            PendingDeprecationWarning
+        )
+    elif x is not None:
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        if not isinstance(y, np.ndarray):
+            y = np.ndarray(y)
+    elif points is not None:
+        if not isinstance(points, np.ndarray):
+            x, y = np.array(points)
+        else:
+            x, y = points[:, 0], points[:, 1]
+    else:
+        print('Must supply x, y or list/array of points.')
+
+    t0 = time.time()
+    # open the raster
+    gdata = gdal.Open(rasterfile)
+
+    # get the location info
+    xul, dx, rx, yul, ry, dy = gdata.GetGeoTransform()
+
+    # read the array
+    print("reading data from {}...".format(rasterfile))
+    data = gdata.ReadAsArray().astype(np.float)
+    nrow, ncol = data.shape
+
+    print("sampling...")
+    # find the closest row, col location for each point
+    i = ((y - yul) / dy).astype(int)
+    j = ((x - xul) / dx).astype(int)
+
+    # mask row, col locations outside the raster
+    within = (i > 0) & (i < nrow) & (j > 0) & (j < ncol)
+
+    # get values at valid point locations
+    results = np.ones(len(i), dtype=float) * np.nan
+    results[within] = data[i[within], j[within]]
+
+    print("finished in {:.2f}s".format(time.time() - t0))
+    return results
+
 def read_raster(rasterfile):
     '''
     reads a GDAL raster into numpy array for plotting
