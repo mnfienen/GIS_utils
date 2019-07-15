@@ -1,9 +1,9 @@
 # suppress annoying pandas openpyxl warning
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning)
-
+import os
+from collections import OrderedDict
 import numpy as np
-import gdal
 import fiona
 from shapely.geometry import Point, shape, asLineString, mapping
 from shapely.wkt import loads
@@ -20,8 +20,8 @@ def getPRJwkt(epsg):
 
    This makes use of links like http://spatialreference.org/ref/epsg/4326/prettywkt/
    """
-   import urllib
-   f=urllib.urlopen("http://spatialreference.org/ref/epsg/{0}/prettywkt/".format(epsg))
+   import urllib.request, urllib.parse, urllib.error
+   f=urllib.request.urlopen("http://spatialreference.org/ref/epsg/{0}/prettywkt/".format(epsg))
    return (f.read())
 
 def get_df_bounds(indf, geo_column='geometry'):
@@ -57,13 +57,6 @@ def get_proj4(prj):
     proj4 string (http://trac.osgeo.org/proj/)
 
     """
-    '''
-    Using fiona (couldn't figure out how to do this with just a prj file)
-    from fiona.crs import to_string
-    c = fiona.open(shp).crs
-    proj4 = to_string(c)
-    '''
-    # using osgeo
     from osgeo import osr
 
     prjfile = prj[:-4] + '.prj' # allows shp or prj to be argued
@@ -73,22 +66,69 @@ def get_proj4(prj):
     proj4 = srs.ExportToProj4()
     return proj4
 
-def shp2df(shplist, index=None, clipto=[], true_values=None, false_values=None, \
+def get_shapefile_bounds(shapefile):
+    xmin, xmax = 0, 0
+    ymin, ymax = 0, 0
+    with fiona.open(shapefile) as src:
+        for rec in src:
+            for crds in rec['geometry']['coordinates']:
+                a = np.array(crds)
+                x, y = a[:, 0], a[:, 1]
+                xmin, xmax = np.min(x, xmin), np.max(x, xmax)
+                ymin, ymax = np.min(y, ymin), np.max(y, ymax)
+    return xmin, xmax, ymin, ymax
+
+def get_photo_location(photos):
+    """Get locations for georeferenced photos using python image library.
+
+    Parameters
+    ----------
+    photos : list of strings
+
+    Returns
+    -------
+    locations : lon, lat tuple or list of lon, lat tuples
+    """
+    import PIL.Image
+    from .get_lat_lon_exif_pil import get_exif_data, get_lat_lon
+    if isinstance(photos, str):
+        photos = [photos]
+
+    locations = []
+    for photo in photos:
+        img = PIL.Image.open(photo)  # load an image through PIL's Image object
+        exif_data = get_exif_data(img)
+        locations.append(get_lat_lon(exif_data))
+    if len(locations) == 1:
+        return locations[0]
+    elif len(locations) > 1:
+        return locations
+
+def shp2df(shplist, index=None, index_dtype=None, clipto=[], filter=None,
+           true_values=None, false_values=None, layer=None,
            skip_empty_geom=True):
-    """Read shapefile into pandas DataFrame.
+    """Read shapefile/DBF, list of shapefiles/DBFs, or File geodatabase (GDB)
+     into pandas DataFrame.
 
     Parameters
     ----------
     shplist : string or list
-        of shapefile name(s)
+        of shapefile/DBF name(s) or FileGDB
     index : string
         Column to use as index for dataframe
+    index_dtype : dtype
+        Enforces a datatype for the index column (for example, if the index field is supposed to be integer
+        but pandas reads it as strings, converts to integer)
     clipto : list
         limit what is brought in to items in index of clipto (requires index)
+    filter : tuple (xmin, ymin, xmax, ymax)
+        bounding box to filter which records are read from the shapefile.
     true_values : list
         same as argument for pandas read_csv
     false_values : list
         same as argument for pandas read_csv
+    layer : str
+        Layer name to read (if opening FileGDB)
     skip_empty_geom : True/False, default True
         Drops shapefile entries with null geometries.
         DBF files (which specify null geometries in their schema) will still be read.
@@ -101,7 +141,10 @@ def shp2df(shplist, index=None, clipto=[], true_values=None, false_values=None, 
     """
     if isinstance(shplist, str):
         shplist = [shplist]
-
+    if not isinstance(true_values, list) and true_values is not None:
+        true_values = [true_values]
+    if not isinstance(false_values, list)  and false_values is not None:
+        false_values = [false_values]
     if len(clipto) > 0 and index:
         clip = True
     else:
@@ -109,30 +152,45 @@ def shp2df(shplist, index=None, clipto=[], true_values=None, false_values=None, 
 
     df = pd.DataFrame()
     for shp in shplist:
-        print "\nreading {}...".format(shp)
-        shp_obj = fiona.open(shp, 'r')
+        print("\nreading {}...".format(shp))
+        shp_obj = fiona.open(shp, 'r', layer=layer)
 
         if index is not None:
             # handle capitolization issues with index field name
-            fields = shp_obj.schema['properties'].keys()
+            fields = list(shp_obj.schema['properties'].keys())
             index = [f for f in fields if index.lower() == f.lower()][0]
 
         attributes = []
         # for reading in shapefiles
-        if shp_obj.schema['geometry'] != 'None':
-            for line in shp_obj:
-
-                props = line['properties']
-                # limit what is brought in to items in index of clipto
-                if clip:
+        meta = shp_obj.meta
+        if meta['schema']['geometry'] != 'None':
+            if filter is not None:
+                print('filtering on bounding box {}, {}, {}, {}...'.format(*filter))
+            if clip: # limit what is brought in to items in index of clipto
+                for line in shp_obj.filter(bbox=filter):
+                    props = line['properties']
                     if not props[index] in clipto:
                         continue
-                props['geometry'] = line.get('geometry', None)
-                attributes.append(props)
-            print '--> building dataframe... (may take a while for large shapefiles)'
+                    props['geometry'] = line.get('geometry', None)
+                    attributes.append(props)
+            else:
+                for line in shp_obj.filter(bbox=filter):
+
+                    props = line['properties']
+                    props['geometry'] = line.get('geometry', None)
+                    attributes.append(props)
+            print('--> building dataframe... (may take a while for large shapefiles)')
             shp_df = pd.DataFrame(attributes)
+            # reorder fields in the DataFrame to match the input shapefile
+            if len(attributes) > 0:
+                shp_df = shp_df[list(attributes[0].keys())]
 
             # handle null geometries
+            if len(shp_df) == 0:
+                print('Empty dataframe! No features were read.')
+                if filter is not None:
+                    print('Check filter {} for consistency \
+with shapefile coordinate system'.format(filter))
             geoms = shp_df.geometry.tolist()
             if geoms.count(None) == 0:
                 shp_df['geometry'] = [shape(g) for g in geoms]
@@ -146,26 +204,34 @@ def shp2df(shplist, index=None, clipto=[], true_values=None, false_values=None, 
 
         # for reading in DBF files (just like shps, but without geometry)
         else:
-            for line in shp_obj:
-
-                props = line['properties']
-                # limit what is brought in to items in index of clipto
-                if clip:
-                    if not props[index] in clipto_index:
+            if clip: # limit what is brought in to items in index of clipto
+                for line in shp_obj:
+                    props = line['properties']
+                    if not props[index] in clipto:
                         continue
-                attributes.append(props)
-            print '--> building dataframe... (may take a while for large shapefiles)'
+                    attributes.append(props)
+            else:
+                for line in shp_obj:
+                    attributes.append(line['properties'])
+            print('--> building dataframe... (may take a while for large shapefiles)')
             shp_df = pd.DataFrame(attributes)
+            # reorder fields in the DataFrame to match the input shapefile
+            if len(attributes) > 0:
+                shp_df = shp_df[list(attributes[0].keys())]
 
         shp_obj.close()
+        if len(shp_df) == 0:
+            continue
         # set the dataframe index from the index column
         if index is not None:
+            if index_dtype is not None:
+                shp_df[index] = shp_df[index].astype(index_dtype)
             shp_df.index = shp_df[index].values
 
         df = df.append(shp_df)
 
         # convert any t/f columns to numpy boolean data
-        if true_values or false_values:
+        if true_values is not None or false_values is not None:
             replace_boolean = {}
             for t in true_values:
                 replace_boolean[t] = True
@@ -173,57 +239,41 @@ def shp2df(shplist, index=None, clipto=[], true_values=None, false_values=None, 
                 replace_boolean[f] = False
 
             # only remap columns that have values to be replaced
-            for c in df.columns:
-                if len(set(df[c]).intersection(set(true_values))) > 0:
+            cols = [c for c in df.columns if c != 'geometry']
+            for c in cols:
+                if len(set(replace_boolean.keys()).intersection(set(df[c]))) > 0:
                     df[c] = df[c].map(replace_boolean)
         
     return df
-    
 
-def shp_properties2(df):
-    # convert dtypes in dataframe to 32 bit
-    #i = -1
-    for i, dtype in enumerate(df.dtypes.tolist()):
-        #i += 1
-        if dtype == np.dtype('float64') or df.columns[i] == 'geometry':
-            continue
-        # need to convert integers to 16-bit for shapefile format
-        #elif dtype == np.dtype('int64') or dtype == np.dtype('int32'):
-        elif 'float' in dtype.name:
-            df[df.columns[i]] = df[df.columns[i]].astype('float64')
-        elif dtype == np.dtype('int64'):
-            df[df.columns[i]] = df[df.columns[i]].astype('int32')
-        elif dtype == np.dtype('bool'):
-            df[df.columns[i]] = df[df.columns[i]].astype('str')
-        # convert all other datatypes (e.g. tuples) to strings
-        else:
-            df[df.columns[i]] = df[df.columns[i]].astype('str')
-    # strip dtypes just down to 'float' or 'int'
-    dtypes = [''.join([c for c in d.name if not c.isdigit()]) for d in list(df.dtypes)]
-    #dtypes = [d.name for d in list(df.dtypes)]
-    # also exchange any 'object' dtype for 'str'
-    dtypes = [d.replace('object', 'str') for d in dtypes]
-    properties = dict(zip(df.columns, dtypes))
-    return properties
 
 def shp_properties(df):
 
-    # remap 64 bit integers to 32 bit
-    int64 = (df.dtypes == 'int64')
-    df.loc[:, int64] = df.loc[:, int64].astype('int32')
+    newdtypes = {'bool': 'str',
+                 'object': 'str',
+                 'datetime64[ns]': 'str'}
 
-    # remap floats
-    floats = np.array(['float' in d.name for d in df.dtypes])
-    df.loc[:, floats] = df.loc[:, floats].astype('float64')
-
-    # remap everything else to strings
-    to_strings = (df.dtypes != 'int64') & (df.dtypes != 'float64') & (df.columns != 'geometry')
-    df.loc[:, to_strings] = df.loc[:, to_strings].astype('str')
+    # fiona/OGR doesn't like numpy ints
+    # shapefile doesn't support 64 bit ints,
+    # but apparently leaving the ints alone is more reliable
+    # than intentionally downcasting them to 32 bit
+    # pandas is smart enough to figure it out on .to_dict()?
+    for c in df.columns:
+        if c != 'geometry':
+            df[c] = df[c].astype(newdtypes.get(df.dtypes[c].name,
+                                               df.dtypes[c].name))
+        if 'int' in df.dtypes[c].name:
+            if np.max(np.abs(df[c])) > 2**31 -1:
+                df[c] = df[c].astype(str)
 
     # strip dtypes to just 'float', 'int' or 'str'
-    dtypes = [''.join([c for c in d.name if not c.isdigit()]) for d in list(df.dtypes)]
-    dtypes = [d.replace('object', 'str') for d in dtypes]
-    properties = dict(zip(df.columns, dtypes))
+    def stripandreplace(s):
+        return ''.join([i for i in s
+                        if not i.isdigit()]).replace('object', 'str')
+    dtypes = [stripandreplace(df[c].dtype.name)
+              if c != 'geometry'
+              else df[c].dtype.name for c in df.columns]
+    properties = OrderedDict(list(zip(df.columns, dtypes)))
     return properties
 
 
@@ -260,7 +310,7 @@ def shpfromdf(df, shpname, Xname, Yname, prj):
             X = df.iloc[i][Xname]
             Y = df.iloc[i][Yname]
             point = Point(X, Y)
-            props = dict(zip(df.columns, df.iloc[i]))
+            props = dict(list(zip(df.columns, df.iloc[i])))
             output.write({'properties': props,
                           'geometry': mapping(point)})
     shutil.copyfile(prj, "{}.prj".format(shpname[:-4]))
@@ -292,23 +342,37 @@ def pointsdf2shp(dataframe, shpname, X='X', Y='Y', index=False,  prj=None, epsg=
     follows the same logic as xlsx2points above but no need for Excel file --> assumes point data already
     in the dataframe. Note that prj, epsg, etc. get passed along using the same logic as df2shp
     '''
-    if 'geometry' not in [k.lower() for k in dataframe.keys()]:
+    if 'geometry' not in [k.lower() for k in list(dataframe.keys())]:
         dataframe['geometry'] = [Point(p) for p in zip(dataframe[X],dataframe[Y])]
     df2shp(dataframe, shpname, 'geometry', index, prj, epsg, proj4, crs)
 
 
-def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, epsg=None, proj4=None, crs=None):
+def df2shp(dataframe, shpname, geo_column='geometry', index=False,
+           retain_order=False,
+           prj=None, epsg=None, proj4=None, crs=None):
     '''
     Write a DataFrame to a shapefile
     dataframe: dataframe to write to shapefile
     geo_column: optional column containing geometry to write - default is 'geometry'
     index: If true, write out the dataframe index as a column
+    retain_order : boolean
+        Retain column order in dataframe, using an OrderedDict. Shapefile will
+        take about twice as long to write, since OrderedDict output is not
+        supported by the pandas DataFrame object.
+
     --->there are four ways to specify the projection....choose one
     prj: <file>.prj filename (string)
     epsg: EPSG identifier (integer)
     proj4: pyproj style projection string definition
     crs: crs attribute (dictionary) as read by fiona
     '''
+    # first check if output path exists
+    if os.path.split(shpname)[0] != '' and not os.path.isdir(os.path.split(shpname)[0]):
+        raise IOError("Output folder doesn't exist")
+
+    # check for empty dataframe
+    if len(dataframe) == 0:
+        raise IndexError("DataFrame is empty!")
 
     df = dataframe.copy() # make a copy so the supplied dataframe isn't edited
 
@@ -318,18 +382,19 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
         df.drop(geo_column, axis=1, inplace=True)
 
     # assign none for geometry, to write a dbf file from dataframe
+    Type = None
     if 'geometry' not in df.columns:
         df['geometry'] = None
-        
-    # include index in shapefile as an attribute field
-    if index:
-        if df.index.name is None:
-            df.index.name = 'index'
-        df[df.index.name] = df.index
+        Type = 'None'
+        mapped = [None] * len(df)
+
+    # reset the index to integer index to enforce ordering
+    # retain index as attribute field if index=True
+    df.reset_index(inplace=True, drop=not index)
 
     # enforce character limit for names! (otherwise fiona marks it zero)
     # somewhat kludgey, but should work for duplicates up to 99
-    df.columns = map(str, df.columns) # convert columns to strings in case some are ints
+    df.columns = list(map(str, df.columns)) # convert columns to strings in case some are ints
     overtheline = [(i, '{}{}'.format(c[:8],i)) for i, c in enumerate(df.columns) if len(c) > 10]
 
     newcolumns = list(df.columns)
@@ -339,9 +404,6 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
 
     properties = shp_properties(df)
     del properties['geometry']
-
-    # sort the dataframe columns (so that properties coincide)
-    df = df.sort(axis=1)
 
     # set projection (or use a prj file, which must be copied after shp is written)
     # alternatively, provide a crs in dictionary form as read using fiona
@@ -357,18 +419,23 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
         pass
     else:
         pass
-        
-    if df.iloc[0]['geometry'] is not None:
-        Type = df.iloc[0]['geometry'].type
-    else:
-        Type = None
+
+    if Type != 'None':
+        for g in df.geometry:
+            try:
+                Type = g.type
+            except:
+                continue
+        mapped = [mapping(g) for g in df.geometry]
         
     schema = {'geometry': Type, 'properties': properties}
     length = len(df)
 
-    props = df.drop('geometry', axis=1).to_dict(orient='records')
-    mapped = [mapping(g) for g in df.geometry]
-    print 'writing {}...'.format(shpname)
+    if not retain_order:
+        props = df.drop('geometry', axis=1).astype(object).to_dict(orient='records')
+    else:
+        props = [OrderedDict(r) for i, r in df.drop('geometry', axis=1).astype(object).iterrows()]
+    print('writing {}...'.format(shpname))
     with fiona.collection(shpname, "w", driver="ESRI Shapefile", crs=crs, schema=schema) as output:
         for i in range(length):
             output.write({'properties': props[i],
@@ -384,10 +451,10 @@ def df2shp(dataframe, shpname, geo_column='geometry', index=False, prj=None, eps
             ofp.close()
         """
         try:
-            print 'copying {} --> {}...'.format(prj, "{}.prj".format(shpname[:-4]))
+            print('copying {} --> {}...'.format(prj, "{}.prj".format(shpname[:-4])))
             shutil.copyfile(prj, "{}.prj".format(shpname[:-4]))
         except IOError:
-            print 'Warning: could not find specified prj file. shp will not be projected.'
+            print('Warning: could not find specified prj file. shp will not be projected.')
 
 
 
@@ -406,7 +473,7 @@ def linestring_shpfromdf(df, shpname, IDname, Xname, Yname, Zname, prj, aggregat
     # if including other properties besides line identifier,
     # aggregate those to single value for line, using supplied aggregate dictionary
     if aggregate:
-        cols = [IDname] + aggregate.keys()
+        cols = [IDname] + list(aggregate.keys())
         aggregated = df[cols].groupby(IDname).agg(aggregate)
         aggregated[IDname] = aggregated.index
         properties = shp_properties(aggregated)
@@ -424,12 +491,86 @@ def linestring_shpfromdf(df, shpname, IDname, Xname, Yname, Zname, prj, aggregat
             lineinfo = df[df[IDname] == line]
             vertices = lineinfo[[Xname, Yname, Zname]].values
             linestring = asLineString(vertices)
-            props = dict(zip(aggregated.columns, aggregated.ix[line, :]))
+            props = dict(list(zip(aggregated.columns, aggregated.ix[line, :])))
             output.write({'properties': props,
                           'geometry': mapping(linestring)})
     shutil.copyfile(prj, "{}.prj".format(shpname[:-4]))
-    
-    
+
+
+def get_values_at_points(rasterfile, x=None, y=None):
+    """Get raster values single point or list of points.
+    Points must be in same coordinate system as raster.
+
+    Parameters
+    ----------
+    rasterfile : str
+        Filename of raster.
+    x : 1D array
+        X coordinate locations
+    y : 1D array
+        Y coordinate locations
+    points : list of tuples or 2D numpy array (npoints, (row, col))
+        Points at which to sample raster.
+
+    Returns
+    -------
+    list of floats
+
+    Notes
+    -----
+    requires gdal
+    """
+    try:
+        import gdal
+    except:
+        print('This function requires gdal.')
+
+    if x is not None and isinstance(x[0], tuple):
+        x, y = np.squeeze(np.array(x))
+        warnings.warn(
+            "new argument input for get_values_at_points is x, y, or points",
+            PendingDeprecationWarning
+        )
+    elif x is not None:
+        if not isinstance(x, np.ndarray):
+            x = np.array(x)
+        if not isinstance(y, np.ndarray):
+            y = np.ndarray(y)
+    elif points is not None:
+        if not isinstance(points, np.ndarray):
+            x, y = np.array(points)
+        else:
+            x, y = points[:, 0], points[:, 1]
+    else:
+        print('Must supply x, y or list/array of points.')
+
+    t0 = time.time()
+    # open the raster
+    gdata = gdal.Open(rasterfile)
+
+    # get the location info
+    xul, dx, rx, yul, ry, dy = gdata.GetGeoTransform()
+
+    # read the array
+    print("reading data from {}...".format(rasterfile))
+    data = gdata.ReadAsArray().astype(np.float)
+    nrow, ncol = data.shape
+
+    print("sampling...")
+    # find the closest row, col location for each point
+    i = ((y - yul) / dy).astype(int)
+    j = ((x - xul) / dx).astype(int)
+
+    # mask row, col locations outside the raster
+    within = (i > 0) & (i < nrow) & (j > 0) & (j < ncol)
+
+    # get values at valid point locations
+    results = np.ones(len(i), dtype=float) * np.nan
+    results[within] = data[i[within], j[within]]
+
+    print("finished in {:.2f}s".format(time.time() - t0))
+    return results
+
 def read_raster(rasterfile):
     '''
     reads a GDAL raster into numpy array for plotting
@@ -438,11 +579,15 @@ def read_raster(rasterfile):
     http://stackoverflow.com/questions/20488765/plot-gdal-raster-using-matplotlib-basemap 
     '''
     try:
+        import gdal
+    except:
+        print('This function requires gdal.')
+    try:
         ds = gdal.Open(rasterfile)
     except:
         raise IOError("problem reading raster file {}".format(rasterfile))
 
-    print '\nreading in {} into numpy array...'.format(rasterfile)
+    print('\nreading in {} into numpy array...'.format(rasterfile))
     data = ds.ReadAsArray()
     gt = ds.GetGeoTransform()
     proj = ds.GetProjection()
@@ -459,14 +604,14 @@ def read_raster(rasterfile):
     
     del ds
 
-    print 'creating a grid of xy coordinates in the original projection...'
+    print('creating a grid of xy coordinates in the original projection...')
     xy = np.mgrid[xmin:xmax+xres:xres, ymax+yres:ymin:yres]
     
     # create a mask for no-data values
     data[data<-1.0e+20] = 0
     
     return data, gt, proj, xy
-    
+
 def flatten_3Dshp(shp, outshape=None):
 	
 	if not outshape:
@@ -483,6 +628,35 @@ def flatten_3Dshp(shp, outshape=None):
 	# poop it back out
 	df2shp(df, outshape, '2D', shp[:-4]+'.prj')
 	
+def _is_None(value):
+    if isinstance(value, str) and value.lower() == 'none':
+        return True
+    elif value is None:
+        return True
+    else:
+        return False
 
-	
-	
+def arc_ascii(array, filename, xll=0, yll=0, cellsize=1.,
+              nodata=-9999, **kwargs):
+    """Write numpy array to Arc Ascii grid.
+
+    Parameters
+    ----------
+    kwargs: keyword arguments to np.savetxt
+    """
+    array = array.copy()
+    array[np.isnan(array)] = nodata
+
+    filename = '.'.join(filename.split('.')[:-1]) + '.asc'  # enforce .asc ending
+    nrow, ncol = array.shape
+    txt = 'ncols  {:d}\n'.format(ncol)
+    txt += 'nrows  {:d}\n'.format(nrow)
+    txt += 'xllcorner  {:f}\n'.format(xll)
+    txt += 'yllcorner  {:f}\n'.format(yll)
+    txt += 'cellsize  {}\n'.format(cellsize)
+    txt += 'NODATA_value  {:.0f}\n'.format(nodata)
+    with open(filename, 'w') as output:
+        output.write(txt)
+    with open(filename, 'ab') as output:
+        np.savetxt(output, array, **kwargs)
+    print('wrote {}'.format(filename))
