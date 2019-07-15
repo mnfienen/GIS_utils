@@ -24,7 +24,7 @@ def getPRJwkt(epsg):
    f=urllib.urlopen("http://spatialreference.org/ref/epsg/{0}/prettywkt/".format(epsg))
    return (f.read())
 
-def get_df_bounds(indf):
+def get_df_bounds(indf, geo_column='geometry'):
     """
 
     :param indf: dataframe that includes a geometry column
@@ -34,7 +34,7 @@ def get_df_bounds(indf):
     miny = np.inf
     maxx = -np.inf
     maxy = -np.inf
-    for cgeom in indf.geometry:
+    for cgeom in indf[geo_column]:
         tmpbounds = cgeom.bounds
 
         minx = np.min([minx, tmpbounds[0]])
