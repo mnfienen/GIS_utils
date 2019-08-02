@@ -543,7 +543,7 @@ def dissolve_df(in_df, dissolve_attribute=None):
             dict = {dissolve_attribute: item, 'geometry': dissolved}
             df_out = df_out.append(dict, ignore_index=True)
             knt +=1
-            print('\r{:d}%'.format(100*knt/length))
+            print('\r{:d}%'.format(int(100*knt/length)))
     else:
         dissolved = unary_union(in_df.geometry.values)
         df_out = pd.DataFrame([{'geometry': dissolved}])
